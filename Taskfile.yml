@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  lint:
+    cmds:
+      - golangci-lint run
+
+  fmt:
+    cmds:
+      - go fmt ./...
+
+  run:
+    cmds:
+      - go run ./cmd/smartdb
+
+  build:
+    cmds:
+      - go build -o bin/smartdb ./cmd/smartdb
+
+  test:
+    cmds:
+      - go test ./...
