@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"smartdb/internal/domain"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ const (
 
 var versionPrefixReg = regexp.MustCompile(`^(\d+)`)
 
-func LoadMigration(db *sql.DB, migrationsPath string) (map[string]*Migration, error) {
+func LoadMigration(db domain.DBTX, migrationsPath string) (map[string]*Migration, error) {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS __migrations (
 			version text PRIMARY KEY,
@@ -148,7 +149,7 @@ func Migrate(db *sql.DB, migrationsPath string, migrationType MigrationType) err
 	return nil
 }
 
-func isMigrationApplied(db *sql.DB, version string) (bool, error) {
+func isMigrationApplied(db domain.DBTX, version string) (bool, error) {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM __migrations WHERE version = ?", version).Scan(&count)
 	if err != nil {
@@ -157,7 +158,7 @@ func isMigrationApplied(db *sql.DB, version string) (bool, error) {
 	return count > 0, nil
 }
 
-func getFinalMigrationAppliedVersion(db *sql.DB) (string, error) {
+func getFinalMigrationAppliedVersion(db domain.DBTX) (string, error) {
 	var version string
 	err := db.QueryRow(`
 		SELECT version

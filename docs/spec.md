@@ -242,14 +242,15 @@ Response
 ### SQL実行
 
 ```http
-POST /api/v1/projects/{project}/query
+POST /api/v1/projects/{project}/sql
 ```
 
 Request
 
 ```json
 {
-  "sql": "SELECT * FROM users"
+  "token": "smartdb-xxxxxxxxx",
+  "query": "SELECT * FROM users"
 }
 ```
 
@@ -257,7 +258,11 @@ Response
 
 ```json
 {
-  "result": [...]
+  "success": true,
+  "result": {
+    "rows": [...],
+    "affectRows": 0,
+  }
 }
 ```
 
@@ -360,7 +365,7 @@ sdb-cli down
 ## Migration管理テーブル
 
 ```sql
-CREATE TABLE schema_migrations (
+CREATE TABLE __migrations (
     version TEXT PRIMARY KEY,
     applied_at DATETIME
 );

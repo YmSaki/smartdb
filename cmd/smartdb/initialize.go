@@ -2,23 +2,15 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
+	"smartdb/internal/domain"
 
 	_ "modernc.org/sqlite"
 )
 
 func InitializeSystemDB(dbPath string) (*sql.DB, error) {
-	dns := fmt.Sprintf(
-		"file:%s?"+
-			"_pragma=journal_mode(WAL)&"+
-			"_pragma=busy_timeout(5000)&"+
-			"_pragma=foreign_keys(1)&"+
-			"_pragma=synchronous(NORMAL)&"+
-			"_pragma=temp_store(MEMORY)",
-		dbPath,
-	)
+	dsn := domain.GetDataBaseDSN(dbPath)
 
-	db, err := sql.Open("sqlite", dns)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}

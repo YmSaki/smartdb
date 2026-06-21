@@ -1,12 +1,14 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"smartdb/internal/domain"
+	"smartdb/internal/handler"
 	"smartdb/internal/project"
 )
 
@@ -19,23 +21,7 @@ type CreateProjectResponse struct {
 }
 
 func CreateProjectHandler(App *domain.App) http.HandlerFunc {
-	return func(
-		w http.ResponseWriter,
-		r *http.Request,
-	) {
-		var req CreateProjectRequest
-
-		err := json.NewDecoder(r.Body).Decode(&req)
-
-		if err != nil {
-			http.Error(
-				w,
-				"Invalid request body",
-				http.StatusBadRequest,
-			)
-			return
-		}
-
+	return handler.HandleJson(func(w http.ResponseWriter, r *http.Request, req CreateProjectRequest) {
 		if req.Name == "" {
 			http.Error(
 				w,
@@ -67,7 +53,7 @@ func CreateProjectHandler(App *domain.App) http.HandlerFunc {
 				ProjectID: projectID,
 			},
 		)
-	}
+	})
 }
 
 func GetProjectsHandler(App *domain.App) http.HandlerFunc {
@@ -88,6 +74,7 @@ func GetProjectsHandler(App *domain.App) http.HandlerFunc {
 		}
 		jsonData, err := json.Marshal(list)
 		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -107,8 +94,21 @@ func GetProjectDetailHandler(App *domain.App) http.HandlerFunc {
 		r *http.Request,
 	) {
 		projectID := r.PathValue("project")
+		if projectID == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 
 		projectData, err := project.GetProject(App.SystemDB, projectID)
+		if err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				w.WriteHeader(http.StatusNotFound)
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			return
+		}
 
 		w.Header().Set(
 			"Content-Type",
@@ -118,6 +118,7 @@ func GetProjectDetailHandler(App *domain.App) http.HandlerFunc {
 		jsonData, err := json.Marshal(projectData)
 		if err != nil {
 			slog.Warn("json convert error", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -150,17 +151,66 @@ func RemoveProjectHandler(App *domain.App) http.HandlerFunc {
 	}
 }
 
-func QueryExecuteHandler(App *domain.App) http.HandlerFunc {
-	return func(
-		w http.ResponseWriter,
-		r *http.Request,
-	) {
-		r.PathValue("project")
+type ExecuteSQLRequest struct {
+	Token string `json:"token"`
+	SQL   string `json:"sql"`
+}
+
+type ExecuteSQLResponse struct {
+	IsSuccess bool `json:"success"`
+	Result    struct {
+		Rows         []map[string]any `json:"rows"`
+		AffectedRows int64            `json:"affectedRows"`
+	} `json:"result"`
+}
+
+func ExecuteSQLHandler(App *domain.App) http.HandlerFunc {
+	return handler.HandleJson(func(w http.ResponseWriter, r *http.Request, req ExecuteSQLRequest) {
+		projectId := r.PathValue("project")
+
+		queryType, err := project.QueryJudge(req.SQL)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ctx := context.Background()
+		var responseData = ExecuteSQLResponse{IsSuccess: true}
+
+		switch queryType {
+		case project.SQLTypeRead:
+			qMap, err := project.Query(ctx, App.SystemDB, projectId, req.SQL)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				responseData.IsSuccess = false
+			} else {
+				responseData.Result.Rows = qMap
+			}
+		default:
+			aRaws, err := project.Execute(ctx, App.SystemDB, projectId, req.SQL)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				responseData.IsSuccess = false
+			} else {
+				responseData.Result.AffectedRows = aRaws
+			}
+		}
 
 		w.Header().Set(
 			"Content-Type",
 			"application/json",
 		)
-		w.WriteHeader(http.StatusOK)
-	}
+
+		jsonData, err := json.Marshal(responseData)
+		if err != nil {
+			slog.Warn("json convert error", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if responseData.IsSuccess {
+			w.WriteHeader(http.StatusOK)
+		}
+
+		_, _ = w.Write(jsonData)
+	})
 }

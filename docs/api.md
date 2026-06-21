@@ -16,7 +16,7 @@ Response
 
 ```json
 {
-  "id": "blog"
+  "projectID": "blog"
 }
 ```
 

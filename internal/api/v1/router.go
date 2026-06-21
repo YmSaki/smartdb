@@ -27,8 +27,8 @@ func RouterMux(App *domain.App) *http.ServeMux {
 	)
 
 	mux.HandleFunc(
-		"POST /projects/{project}/query",
-		QueryExecuteHandler(App),
+		"POST /projects/{project}/sql",
+		ExecuteSQLHandler(App),
 	)
 
 	return mux

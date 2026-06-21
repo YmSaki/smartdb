@@ -2,9 +2,11 @@ package project
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
+	"regexp"
 	"smartdb/internal/domain"
 	"strings"
 
@@ -27,9 +29,19 @@ type ProjectInfo struct {
 // It also creates:
 //
 //   - migrations/
-func Create(name string, db *sql.DB) (string, error) {
-	log.Printf("Creating project: %s\n", name)
-	projectInfo := getProjectPath(name)
+func Create(name string, db *sql.DB) (id string, err error) {
+	slog.Info("Creating project", "projectName", name)
+	projectInfo := genProjectSeed(name)
+
+	defer func() {
+		if err != nil {
+			slog.Warn("rollback: remove directory", "error", err)
+			os.RemoveAll(projectInfo.Path)
+			if delErr := DeleteProjectRow(db, projectInfo.ID); delErr != nil && errors.Is(delErr, sql.ErrNoRows) {
+				slog.Error("cleanup: failed to delete row", "error", delErr)
+			}
+		}
+	}()
 
 	if err := AddProject(db, projectInfo.ID, name); err != nil {
 		return "", err
@@ -50,12 +62,19 @@ func Create(name string, db *sql.DB) (string, error) {
 	if err := UpdateProjectState(db, projectInfo.ID, domain.StateInactive); err != nil {
 		return "", err
 	}
+
 	return projectInfo.ID, nil
 }
 
-// getProjectPath generates a unique project path based on the project name and current timestamp.
-func getProjectPath(name string) ProjectInfo {
-	projectName := strings.ToLower(name)
+var projectNameReg = regexp.MustCompile("[^a-z0-9_-]")
+
+// genProjectSeed generates a unique project path based on the project name and current timestamp.
+func genProjectSeed(name string) ProjectInfo {
+	projectName := strings.TrimSpace(strings.ToLower(name))
+	projectName = strings.Trim(projectNameReg.ReplaceAllString(projectName, ""), "_-")
+	if projectName == "" {
+		projectName = "project"
+	}
 	slug := slug(projectName)
 	ID := fmt.Sprintf("%s-%s", projectName, slug)
 	return ProjectInfo{
@@ -67,16 +86,8 @@ func getProjectPath(name string) ProjectInfo {
 // createBlankDatabase creates an empty SQLite database file at the specified project path.
 func createBlankDatabase(projectPath string) error {
 	dbPath := projectPath + "/database.db"
-	dns := fmt.Sprintf(
-		"file:%s?"+
-			"_pragma=journal_mode(WAL)&"+
-			"_pragma=busy_timeout(5000)&"+
-			"_pragma=foreign_keys(1)&"+
-			"_pragma=synchronous(NORMAL)&"+
-			"_pragma=temp_store(MEMORY)",
-		dbPath,
-	)
-	db, err := sql.Open("sqlite", dns)
+	dsn := domain.GetDataBaseDSN(dbPath)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return err
 	}

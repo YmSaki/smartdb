@@ -2,6 +2,7 @@ package project
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"smartdb/internal/domain"
@@ -10,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func UpdateProjectState(systemDB *sql.DB, projectID string, state domain.ProjectState) error {
+func UpdateProjectState(systemDB domain.DBTX, projectID string, state domain.ProjectState) error {
 	if projectID == "" {
 		return fmt.Errorf("ProjectID is empty")
 	}
@@ -40,7 +41,7 @@ func UpdateProjectState(systemDB *sql.DB, projectID string, state domain.Project
 	return nil
 }
 
-func AddProject(systemDB *sql.DB, projectID string, name string) error {
+func AddProject(systemDB domain.DBTX, projectID string, name string) error {
 	_, err := systemDB.Exec(`
 		INSERT INTO projects (id, name) VALUES (?, ?)
 	`, projectID, name)
@@ -51,7 +52,7 @@ type ProjectFilter struct {
 	State []domain.ProjectState
 }
 
-func GetProjectList(systemDB *sql.DB, filter ProjectFilter) ([]domain.Project, error) {
+func GetProjectList(systemDB domain.DBTX, filter ProjectFilter) ([]domain.Project, error) {
 	if len(filter.State) == 0 {
 		return []domain.Project{}, nil
 	}
@@ -92,7 +93,7 @@ func GetProjectList(systemDB *sql.DB, filter ProjectFilter) ([]domain.Project, e
 	return projectList, nil
 }
 
-func GetProject(systemDB *sql.DB, projectID string) (domain.Project, error) {
+func GetProject(systemDB domain.DBTX, projectID string) (domain.Project, error) {
 	var project domain.Project
 	row := systemDB.QueryRow(`
 		SELECT *
@@ -100,8 +101,30 @@ func GetProject(systemDB *sql.DB, projectID string) (domain.Project, error) {
 		WHERE id = ?
 	`, projectID)
 	if err := domain.ScanProject(row, &project); err != nil {
-		slog.Error("GetProject select error", "error", err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Error("GetProject select error", "error", err)
+		}
 		return project, err
 	}
 	return project, nil
+}
+
+func GetProjectDNS(projectID string) string {
+	return domain.GetDataBaseDSN(fmt.Sprintf("data/%s/database.db", projectID))
+}
+
+func DeleteProjectRow(systemDB domain.DBTX, projectID string) error {
+	ar, err := systemDB.Exec("DELETE FROM projects WHERE id = ?", projectID)
+	if err != nil {
+		return err
+	}
+	c, err := ar.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if c == 0 {
+		slog.Warn("delete target not found")
+		return sql.ErrNoRows
+	}
+	return nil
 }
