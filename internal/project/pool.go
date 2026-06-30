@@ -18,7 +18,7 @@ func NewConnectionPool() *ConnectionPool {
 	}
 }
 
-func (p *ConnectionPool) Get(projectID string) (*sql.DB, error) {
+func (p *ConnectionPool) Get(dataDir string, projectID string) (*sql.DB, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -26,7 +26,7 @@ func (p *ConnectionPool) Get(projectID string) (*sql.DB, error) {
 		return db, nil
 	}
 
-	dsn := GetProjectDNS(projectID)
+	dsn := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	_ "modernc.org/sqlite"
 )
+
+var validTableName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 type ProjectStats struct {
 	Size             int64  `json:"size"`
@@ -25,8 +28,8 @@ type ColumnInfo struct {
 	PK        int     `json:"pk"`
 }
 
-func GetProjectStats(ctx context.Context, projectID string) (*ProjectStats, error) {
-	dsn := GetProjectDNS(projectID)
+func GetProjectStats(ctx context.Context, dataDir string, projectID string) (*ProjectStats, error) {
+	dsn := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -50,7 +53,7 @@ func GetProjectStats(ctx context.Context, projectID string) (*ProjectStats, erro
 		return nil, err
 	}
 
-	backupDir := fmt.Sprintf("data/%s/backups", projectID)
+	backupDir := fmt.Sprintf("%s/%s/backups", dataDir, projectID)
 	entries, err := os.ReadDir(backupDir)
 	if err == nil {
 		for _, e := range entries {
@@ -71,8 +74,8 @@ func GetProjectStats(ctx context.Context, projectID string) (*ProjectStats, erro
 	return stats, nil
 }
 
-func GetTables(ctx context.Context, projectID string) ([]string, error) {
-	dsn := GetProjectDNS(projectID)
+func GetTables(ctx context.Context, dataDir string, projectID string) ([]string, error) {
+	dsn := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -101,8 +104,12 @@ func GetTables(ctx context.Context, projectID string) ([]string, error) {
 	return tables, rows.Err()
 }
 
-func GetTableSchema(ctx context.Context, projectID string, tableName string) ([]ColumnInfo, error) {
-	dsn := GetProjectDNS(projectID)
+func GetTableSchema(ctx context.Context, dataDir string, projectID string, tableName string) ([]ColumnInfo, error) {
+	if !validTableName.MatchString(tableName) {
+		return nil, fmt.Errorf("invalid table name: %s", tableName)
+	}
+
+	dsn := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

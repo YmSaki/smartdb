@@ -109,8 +109,25 @@ func GetProject(systemDB domain.DBTX, projectID string) (domain.Project, error) 
 	return project, nil
 }
 
-func GetProjectDNS(projectID string) string {
-	return domain.GetDataBaseDSN(fmt.Sprintf("data/%s/database.db", projectID))
+func GetProjectDNS(dataDir string, projectID string) string {
+	return domain.GetDataBaseDSN(fmt.Sprintf("%s/%s/database.db", dataDir, projectID))
+}
+
+func UpdateProjectName(systemDB domain.DBTX, projectID string, name string) error {
+	res, err := systemDB.Exec(`
+		UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, name, projectID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func DeleteProjectRow(systemDB domain.DBTX, projectID string) error {

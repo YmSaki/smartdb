@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"smartdb/internal/auth"
 	"smartdb/internal/domain"
 	"smartdb/internal/handler"
 	"smartdb/internal/project"
@@ -26,7 +28,7 @@ func CreateProjectHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
-		projectID, err := project.Create(req.Name, App.SystemDB)
+		projectID, err := project.Create(req.Name, App.SystemDB, App.Config.DataDir)
 		if err != nil {
 			slog.Error("project creation failed", "error", err)
 			handler.WriteError(w, http.StatusInternalServerError, "PROJECT_CREATION_FAILED", "Project creation failed")
@@ -43,7 +45,8 @@ func GetProjectsHandler(App *domain.App) http.HandlerFunc {
 		filter.State = []domain.ProjectState{domain.StateInactive, domain.StateActive}
 		list, err := project.GetProjectList(App.SystemDB, filter)
 		if err != nil {
-			handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			slog.Error("failed to list projects", "error", err)
+			handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list projects")
 			return
 		}
 		handler.WriteJSON(w, http.StatusOK, list)
@@ -109,18 +112,46 @@ func PatchProjectHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
-		if req.State != "" {
-			state := domain.ProjectState(req.State)
-			if !state.IsValid() {
-				handler.WriteError(w, http.StatusBadRequest, "INVALID_STATE", "Invalid project state")
+		if req.Name != "" {
+			if err := handler.ValidateProjectName(req.Name); err != nil {
+				handler.WriteError(w, http.StatusBadRequest, "INVALID_PROJECT_NAME", err.Error())
 				return
 			}
-			if err := project.UpdateProjectState(App.SystemDB, projectID, state); err != nil {
+			if err := project.UpdateProjectName(App.SystemDB, projectID, req.Name); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					handler.WriteError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist")
 				} else {
 					handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")
 				}
+				return
+			}
+		}
+
+		if req.State != "" {
+			newState := domain.ProjectState(req.State)
+			if !newState.IsValid() {
+				handler.WriteError(w, http.StatusBadRequest, "INVALID_STATE", "Invalid project state")
+				return
+			}
+
+			current, err := project.GetProject(App.SystemDB, projectID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					handler.WriteError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist")
+				} else {
+					handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")
+				}
+				return
+			}
+
+			if !current.State.CanTransitionTo(newState) {
+				handler.WriteError(w, http.StatusConflict, "INVALID_TRANSITION",
+					fmt.Sprintf("Cannot transition from %s to %s", current.State, newState))
+				return
+			}
+
+			if err := project.UpdateProjectState(App.SystemDB, projectID, newState); err != nil {
+				handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")
 				return
 			}
 		}
@@ -157,7 +188,7 @@ func GetProjectStatsHandler(App *domain.App) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), App.Config.QueryTimeout)
 		defer cancel()
 
-		stats, err := project.GetProjectStats(ctx, projectID)
+		stats, err := project.GetProjectStats(ctx, App.Config.DataDir, projectID)
 		if err != nil {
 			slog.Error("failed to get project stats", "projectID", projectID, "error", err)
 			handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get project stats")
@@ -183,7 +214,7 @@ func GetProjectTablesHandler(App *domain.App) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), App.Config.QueryTimeout)
 		defer cancel()
 
-		tables, err := project.GetTables(ctx, projectID)
+		tables, err := project.GetTables(ctx, App.Config.DataDir, projectID)
 		if err != nil {
 			slog.Error("failed to get tables", "projectID", projectID, "error", err)
 			handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get tables")
@@ -215,7 +246,7 @@ func GetTableSchemaHandler(App *domain.App) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), App.Config.QueryTimeout)
 		defer cancel()
 
-		schema, err := project.GetTableSchema(ctx, projectID, tableName)
+		schema, err := project.GetTableSchema(ctx, App.Config.DataDir, projectID, tableName)
 		if err != nil {
 			slog.Error("failed to get table schema", "projectID", projectID, "table", tableName, "error", err)
 			handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to get table schema")
@@ -252,6 +283,14 @@ func ExecuteSQLHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
+		ac := auth.GetAuthContext(r.Context())
+		if ac != nil {
+			if err := auth.CheckSQLPermission(ac.Role, queryType); err != nil {
+				handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", err.Error())
+				return
+			}
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), App.Config.QueryTimeout)
 		defer cancel()
 
@@ -259,7 +298,7 @@ func ExecuteSQLHandler(App *domain.App) http.HandlerFunc {
 
 		switch queryType {
 		case project.SQLTypeRead, project.SQLTypeManage:
-			qMap, err := project.Query(ctx, App.SystemDB, projectId, req.SQL)
+			qMap, err := project.Query(ctx, App.Config.DataDir, projectId, req.SQL)
 			if err != nil {
 				handler.WriteError(w, http.StatusBadRequest, "SQL_ERROR", err.Error())
 				responseData.IsSuccess = false
@@ -267,7 +306,7 @@ func ExecuteSQLHandler(App *domain.App) http.HandlerFunc {
 			}
 			responseData.Result.Rows = qMap
 		default:
-			aRows, err := project.Execute(ctx, App.SystemDB, projectId, req.SQL)
+			aRows, err := project.Execute(ctx, App.Config.DataDir, projectId, req.SQL)
 			if err != nil {
 				handler.WriteError(w, http.StatusBadRequest, "SQL_ERROR", err.Error())
 				responseData.IsSuccess = false

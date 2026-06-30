@@ -82,13 +82,13 @@ func RouterMux(App *domain.App) *http.ServeMux {
 	)
 
 	// Apply CORS to all routes
-	return withCORS(mux)
+	return withCORS(mux, App.Config.CORSOrigins)
 }
 
 // withCORS wraps the mux with CORS middleware and returns a new mux.
-func withCORS(next *http.ServeMux) *http.ServeMux {
+func withCORS(next *http.ServeMux, origins string) *http.ServeMux {
 	wrapped := http.NewServeMux()
-	wrapped.Handle("/", handler.CORSMiddleware(next))
+	wrapped.Handle("/", handler.CORSMiddleware(origins)(next))
 	return wrapped
 }
 

@@ -126,11 +126,15 @@ func Migrate(db *sql.DB, migrationsPath string, migrationType MigrationType) err
 			return errors.Join(err, fmt.Errorf("There are no items to migrate."))
 		}
 
-		if mapMigrations[downVersion].DownFile == "" {
+		m := mapMigrations[downVersion]
+		if m == nil {
+			return fmt.Errorf("migration %s not found on disk", downVersion)
+		}
+		if m.DownFile == "" {
 			return fmt.Errorf("migration %s has not down file", downVersion)
 		}
 
-		if err := executeMigration(db, downVersion, filepath.Join(migrationsPath, mapMigrations[downVersion].DownFile), MigrationTypeDown); err != nil {
+		if err := executeMigration(db, downVersion, filepath.Join(migrationsPath, m.DownFile), MigrationTypeDown); err != nil {
 			return err
 		}
 	case MigrationTypeUp:

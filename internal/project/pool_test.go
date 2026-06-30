@@ -42,7 +42,7 @@ func TestPoolGet(t *testing.T) {
 	pool := NewConnectionPool()
 	defer pool.Close()
 
-	db, err := pool.Get("test-project")
+	db, err := pool.Get("./data", "test-project")
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -59,11 +59,11 @@ func TestPoolReuse(t *testing.T) {
 	pool := NewConnectionPool()
 	defer pool.Close()
 
-	db1, err := pool.Get("test-project")
+	db1, err := pool.Get("./data", "test-project")
 	if err != nil {
 		t.Fatal(err)
 	}
-	db2, err := pool.Get("test-project")
+	db2, err := pool.Get("./data", "test-project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestPoolClose(t *testing.T) {
 	setupPoolTest(t, "test-project")
 	pool := NewConnectionPool()
 
-	db, err := pool.Get("test-project")
+	db, err := pool.Get("./data", "test-project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestPoolConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range 5 {
-				db, err := pool.Get("test-project")
+				db, err := pool.Get("./data", "test-project")
 				if err != nil {
 					mu.Lock()
 					errs = append(errs, err)
@@ -132,15 +132,15 @@ func TestPoolDifferentProjects(t *testing.T) {
 	pool := NewConnectionPool()
 	defer pool.Close()
 
-	dbA, err := pool.Get("project-a")
+	dbA, err := pool.Get("./data", "project-a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dbB, err := pool.Get("project-b")
+	dbB, err := pool.Get("./data", "project-b")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dbA2, err := pool.Get("project-a")
+	dbA2, err := pool.Get("./data", "project-a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestPoolConnectionValidity(t *testing.T) {
 	pool := NewConnectionPool()
 	defer pool.Close()
 
-	db, err := pool.Get("test-project")
+	db, err := pool.Get("./data", "test-project")
 	if err != nil {
 		t.Fatal(err)
 	}

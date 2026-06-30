@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"smartdb/internal/auth"
 	"smartdb/internal/domain"
@@ -36,6 +38,12 @@ func CreateAPIKeyHandler(App *domain.App) http.HandlerFunc {
 		case auth.RoleAdmin, auth.RoleReadWrite, auth.RoleReadOnly:
 		default:
 			handler.WriteError(w, http.StatusBadRequest, "INVALID_ROLE", "Role must be admin, read_write, or read_only")
+			return
+		}
+
+		ac := auth.GetAuthContext(r.Context())
+		if ac != nil && ac.Role != auth.RoleAdmin {
+			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin keys can create new API keys")
 			return
 		}
 
@@ -103,14 +111,25 @@ func ListAPIKeysHandler(App *domain.App) http.HandlerFunc {
 
 func RevokeAPIKeyHandler(App *domain.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		projectID := r.PathValue("project")
+		if err := handler.ValidateProjectID(projectID); err != nil {
+			handler.WriteError(w, http.StatusBadRequest, "INVALID_PROJECT_ID", err.Error())
+			return
+		}
+
 		keyID := r.PathValue("id")
 		if keyID == "" {
 			handler.WriteError(w, http.StatusBadRequest, "INVALID_KEY_ID", "Key ID is required")
 			return
 		}
 
-		if err := auth.RevokeKey(App.SystemDB, keyID); err != nil {
-			handler.WriteError(w, http.StatusNotFound, "KEY_NOT_FOUND", "API key not found or already revoked")
+		err := auth.RevokeKeyForProject(App.SystemDB, keyID, projectID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				handler.WriteError(w, http.StatusNotFound, "KEY_NOT_FOUND", "API key not found or already revoked")
+			} else {
+				handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to revoke API key")
+			}
 			return
 		}
 

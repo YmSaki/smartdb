@@ -7,19 +7,25 @@ import (
 )
 
 type Config struct {
-	Port         int
-	DataDir      string
-	LogLevel     string
-	QueryTimeout time.Duration
+	Port             int
+	DataDir          string
+	LogLevel         string
+	QueryTimeout     time.Duration
+	CORSOrigins      string
+	BackupInterval   time.Duration
+	BackupMaxGen     int
 }
 
 // LoadDefaults returns a Config with default values, ignoring environment variables.
 func LoadDefaults() *Config {
 	return &Config{
-		Port:         8080,
-		DataDir:      "./data",
-		LogLevel:     "info",
-		QueryTimeout: 5 * time.Second,
+		Port:           8080,
+		DataDir:        "./data",
+		LogLevel:       "info",
+		QueryTimeout:   5 * time.Second,
+		CORSOrigins:    "*",
+		BackupInterval: 24 * time.Hour,
+		BackupMaxGen:   7,
 	}
 }
 
@@ -44,6 +50,22 @@ func Load() *Config {
 	if v := os.Getenv("SDB_QUERY_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			cfg.QueryTimeout = d
+		}
+	}
+
+	if v := os.Getenv("SDB_CORS_ORIGINS"); v != "" {
+		cfg.CORSOrigins = v
+	}
+
+	if v := os.Getenv("SDB_BACKUP_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.BackupInterval = d
+		}
+	}
+
+	if v := os.Getenv("SDB_BACKUP_MAX_GEN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.BackupMaxGen = n
 		}
 	}
 

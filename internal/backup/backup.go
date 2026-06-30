@@ -1,15 +1,17 @@
 package backup
 
 import (
+	"database/sql"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"smartdb/internal/domain"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 func CreateBackup(dataDir string, projectID string) (string, error) {
-	srcPath := filepath.Join(dataDir, projectID, "database.db")
 	backupDir := filepath.Join(dataDir, projectID, "backups")
 
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
@@ -20,28 +22,17 @@ func CreateBackup(dataDir string, projectID string) (string, error) {
 	backupName := fmt.Sprintf("%s.db", timestamp)
 	dstPath := filepath.Join(backupDir, backupName)
 
-	if err := copyFile(srcPath, dstPath); err != nil {
-		return "", fmt.Errorf("copy database: %w", err)
+	srcDSN := domain.GetDataBaseDSN(filepath.Join(dataDir, projectID, "database.db"))
+	db, err := sql.Open("sqlite", srcDSN)
+	if err != nil {
+		return "", fmt.Errorf("open source db: %w", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("VACUUM INTO ?", dstPath); err != nil {
+		os.Remove(dstPath)
+		return "", fmt.Errorf("vacuum into: %w", err)
 	}
 
 	return backupName, nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return out.Sync()
 }

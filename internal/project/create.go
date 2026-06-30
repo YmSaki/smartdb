@@ -29,15 +29,15 @@ type ProjectInfo struct {
 // It also creates:
 //
 //   - migrations/
-func Create(name string, db *sql.DB) (id string, err error) {
+func Create(name string, db *sql.DB, dataDir string) (id string, err error) {
 	slog.Info("Creating project", "projectName", name)
-	projectInfo := genProjectSeed(name)
+	projectInfo := genProjectSeed(name, dataDir)
 
 	defer func() {
 		if err != nil {
 			slog.Warn("rollback: remove directory", "error", err)
 			os.RemoveAll(projectInfo.Path)
-			if delErr := DeleteProjectRow(db, projectInfo.ID); delErr != nil && errors.Is(delErr, sql.ErrNoRows) {
+			if delErr := DeleteProjectRow(db, projectInfo.ID); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 				slog.Error("cleanup: failed to delete row", "error", delErr)
 			}
 		}
@@ -69,7 +69,7 @@ func Create(name string, db *sql.DB) (id string, err error) {
 var projectNameReg = regexp.MustCompile("[^a-z0-9_-]")
 
 // genProjectSeed generates a unique project path based on the project name and current timestamp.
-func genProjectSeed(name string) ProjectInfo {
+func genProjectSeed(name string, dataDir string) ProjectInfo {
 	projectName := strings.TrimSpace(strings.ToLower(name))
 	projectName = strings.Trim(projectNameReg.ReplaceAllString(projectName, ""), "_-")
 	if projectName == "" {
@@ -79,7 +79,7 @@ func genProjectSeed(name string) ProjectInfo {
 	ID := fmt.Sprintf("%s-%s", projectName, slug)
 	return ProjectInfo{
 		ID:   ID,
-		Path: "data/" + ID,
+		Path: dataDir + "/" + ID,
 	}
 }
 

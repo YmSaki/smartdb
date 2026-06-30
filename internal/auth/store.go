@@ -90,6 +90,24 @@ func RevokeKey(db domain.DBTX, id string) error {
 	return nil
 }
 
+// RevokeKeyForProject revokes a key only if it belongs to the specified project.
+func RevokeKeyForProject(db domain.DBTX, id string, projectID string) error {
+	res, err := db.Exec(`
+		UPDATE api_keys SET revoked_at = ? WHERE id = ? AND project_id = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), id, projectID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

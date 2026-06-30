@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"log/slog"
 	"smartdb/internal/ats"
-	"smartdb/internal/domain"
 )
 
 type SQLType string
@@ -25,9 +24,8 @@ func QueryJudge(query string) (SQLType, error) {
 	return SQLType(cat), nil
 }
 
-func Query(ctx context.Context, systemDB domain.DBTX, projectID string, query string) ([]map[string]any, error) {
-	// "systemDB" reserved for token/project lookup
-	dns := GetProjectDNS(projectID)
+func Query(ctx context.Context, dataDir string, projectID string, query string) ([]map[string]any, error) {
+	dns := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dns)
 	if err != nil {
 		return nil, err
@@ -95,8 +93,8 @@ func Query(ctx context.Context, systemDB domain.DBTX, projectID string, query st
 	return results, nil
 }
 
-func Execute(ctx context.Context, systemDB domain.DBTX, projectID string, query string) (int64, error) {
-	dns := GetProjectDNS(projectID)
+func Execute(ctx context.Context, dataDir string, projectID string, query string) (int64, error) {
+	dns := GetProjectDNS(dataDir, projectID)
 	db, err := sql.Open("sqlite", dns)
 	if err != nil {
 		return 0, err

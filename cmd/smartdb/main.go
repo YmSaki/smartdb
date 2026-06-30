@@ -9,9 +9,11 @@ import (
 	"os/signal"
 	"smartdb/internal/api"
 	"smartdb/internal/auth"
+	"smartdb/internal/backup"
 	"smartdb/internal/config"
 	"smartdb/internal/domain"
 	"smartdb/internal/handler"
+	"smartdb/internal/project"
 	"time"
 )
 
@@ -50,6 +52,22 @@ func main() {
 		slog.Error("Failed to bootstrap admin key", "error", err)
 		os.Exit(1)
 	}
+
+	scheduler := backup.NewScheduler(cfg.DataDir, cfg.BackupInterval, cfg.BackupMaxGen, func() []string {
+		filter := project.ProjectFilter{State: []domain.ProjectState{domain.StateActive}}
+		list, err := project.GetProjectList(db, filter)
+		if err != nil {
+			slog.Error("failed to list projects for backup", "error", err)
+			return nil
+		}
+		ids := make([]string, len(list))
+		for i, p := range list {
+			ids[i] = p.ID
+		}
+		return ids
+	})
+	scheduler.Start()
+	defer scheduler.Stop()
 
 	serverMux := http.NewServeMux()
 	serverMux.Handle(

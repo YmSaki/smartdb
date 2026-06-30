@@ -135,8 +135,26 @@ func (l *Lexer) skipSpace() {
 		ch := l.input[l.pos]
 		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
 			l.pos++
-		} else {
-			break
+			continue
 		}
+		if l.pos+1 < len(l.input) && ch == '-' && l.input[l.pos+1] == '-' {
+			l.pos += 2
+			for l.pos < len(l.input) && l.input[l.pos] != '\n' {
+				l.pos++
+			}
+			continue
+		}
+		if l.pos+1 < len(l.input) && ch == '/' && l.input[l.pos+1] == '*' {
+			l.pos += 2
+			for l.pos+1 < len(l.input) {
+				if l.input[l.pos] == '*' && l.input[l.pos+1] == '/' {
+					l.pos += 2
+					break
+				}
+				l.pos++
+			}
+			continue
+		}
+		break
 	}
 }

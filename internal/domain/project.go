@@ -46,3 +46,24 @@ func (p ProjectState) IsValid() bool {
 		return false
 	}
 }
+
+var allowedTransitions = map[ProjectState][]ProjectState{
+	StateCreating: {StateInactive},
+	StateInactive: {StateActive, StateDeleted},
+	StateActive:   {StateInactive, StateDeleted},
+	StateDeleting: {StateDeleted},
+	StateDeleted:  {StateWiped},
+}
+
+func (from ProjectState) CanTransitionTo(to ProjectState) bool {
+	targets, ok := allowedTransitions[from]
+	if !ok {
+		return false
+	}
+	for _, t := range targets {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
