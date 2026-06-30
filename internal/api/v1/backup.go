@@ -1,0 +1,53 @@
+package v1
+
+import (
+	"net/http"
+	"smartdb/internal/backup"
+	"smartdb/internal/domain"
+	"smartdb/internal/handler"
+)
+
+func BackupHandler(App *domain.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		projectID := r.PathValue("project")
+		if err := handler.ValidateProjectID(projectID); err != nil {
+			handler.WriteError(w, http.StatusBadRequest, "INVALID_PROJECT_ID", err.Error())
+			return
+		}
+
+		path, err := backup.CreateBackup(App.Config.DataDir, projectID)
+		if err != nil {
+			handler.WriteError(w, http.StatusInternalServerError, "BACKUP_FAILED", "Backup failed: "+err.Error())
+			return
+		}
+
+		handler.WriteJSON(w, http.StatusOK, map[string]string{
+			"backup": path,
+		})
+	}
+}
+
+type RestoreRequest struct {
+	Backup string `json:"backup"`
+}
+
+func RestoreHandler(App *domain.App) http.HandlerFunc {
+	return handler.HandleJson(func(w http.ResponseWriter, r *http.Request, req RestoreRequest) {
+		projectID := r.PathValue("project")
+		if err := handler.ValidateProjectID(projectID); err != nil {
+			handler.WriteError(w, http.StatusBadRequest, "INVALID_PROJECT_ID", err.Error())
+			return
+		}
+		if req.Backup == "" {
+			handler.WriteError(w, http.StatusBadRequest, "INVALID_BACKUP", "Backup name is required")
+			return
+		}
+
+		if err := backup.RestoreBackup(App.Config.DataDir, projectID, req.Backup); err != nil {
+			handler.WriteError(w, http.StatusInternalServerError, "RESTORE_FAILED", "Restore failed: "+err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}

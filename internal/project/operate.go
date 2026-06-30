@@ -3,10 +3,9 @@ package project
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log/slog"
+	"smartdb/internal/ats"
 	"smartdb/internal/domain"
-	"strings"
 )
 
 type SQLType string
@@ -18,28 +17,12 @@ const (
 	SQLTypeAdmin  SQLType = "admin"
 )
 
-func QueryJudge(sql string) (SQLType, error) {
-	trimmed := strings.TrimSpace(sql)
-	if trimmed == "" {
-		return "", errors.New("nothing query")
+func QueryJudge(query string) (SQLType, error) {
+	cat, err := ats.ClassifySQL(query)
+	if err != nil {
+		return "", err
 	}
-
-	// 2. 大文字に統一
-	upper := strings.ToUpper(trimmed)
-
-	if strings.HasPrefix(upper, "SELECT") ||
-		strings.HasPrefix(upper, "WITH") {
-		return SQLTypeRead, nil
-	} else if strings.HasPrefix(upper, "INSERT") ||
-		strings.HasPrefix(upper, "UPDATE") ||
-		strings.HasPrefix(upper, "DELETE") {
-		return SQLTypeEdit, nil
-	} else if strings.HasPrefix(upper, "PRAGMA") ||
-		strings.HasPrefix(upper, "EXPLAIN") {
-		return SQLTypeManage, nil
-	} else {
-		return SQLTypeAdmin, nil
-	}
+	return SQLType(cat), nil
 }
 
 func Query(ctx context.Context, systemDB domain.DBTX, projectID string, query string) ([]map[string]any, error) {

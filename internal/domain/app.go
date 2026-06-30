@@ -1,8 +1,12 @@
 package domain
 
-import "database/sql"
+import (
+	"database/sql"
+	"smartdb/internal/config"
+)
 
-// App はシステムデータベースへのポインタを保持する型です
+// App はシステムデータベースへのポインタと設定を保持する型です
 type App struct {
 	SystemDB *sql.DB
+	Config   *config.Config
 }

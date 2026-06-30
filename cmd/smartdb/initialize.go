@@ -34,5 +34,20 @@ func InitializeSystemDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS api_keys (
+			id           TEXT PRIMARY KEY,
+			project_id   TEXT REFERENCES projects(id),
+			name         TEXT NOT NULL,
+			token_hash   TEXT NOT NULL UNIQUE,
+			role         TEXT NOT NULL CHECK (role IN ('admin', 'read_write', 'read_only')),
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+			revoked_at   DATETIME
+		)
+	`)
+	if err != nil {
+		return nil, err
+	}
+
 	return db, nil
 }
