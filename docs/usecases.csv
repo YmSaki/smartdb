@@ -1,0 +1,52 @@
+usecase_id,feature_id,actor,action,precondition,expected_result,priority
+UC01,F01,Developer,POST /api/v1/projects with name,Server running,Project created with ID returned and directory structure generated,done
+UC02,F02,Developer,GET /api/v1/projects,At least 1 project exists,List of projects with inactive/active state returned,done
+UC03,F03,Developer,GET /api/v1/projects/{id},Project exists,Project detail with id/name/state/timestamps returned,done
+UC04,F04,Developer,DELETE /api/v1/projects/{id},Project exists,Project state changed to deleted (soft delete),done
+UC05,F05,Developer,POST /api/v1/projects/{id}/sql with SELECT,Project exists with tables,Query result rows returned as JSON array,done
+UC06,F06,Developer,POST /api/v1/projects/{id}/sql with INSERT,Project exists with tables,Affected rows count returned,done
+UC07,F07,System,Classify SQL via GoATS lexer/classifier,SQL string provided,SQL categorized as read/edit/manage/admin with WITH resolved,done
+UC08,F08,System,Initialize system.db on startup,First startup,projects and api_keys tables created,done
+UC09,F09,Developer,Apply migration files to project DB,Migration files in migrations/ dir,SQL executed in order and version tracked in __migrations,done
+UC10,B01,System,Tokenize SQL string,SQL string provided,Token stream with keywords/strings/symbols/semicolons,done
+UC11,M01,Admin,Set SDB_PORT env var,Environment configured,"Server starts on specified port, defaults to 8080",done
+UC12,M01,Admin,Start server without any config,No env vars set,Server starts with sensible defaults (port 8080 etc),done
+UC13,M02,System,Receive SIGTERM during request processing,Requests in flight,"In-flight requests complete, then server shuts down cleanly",done
+UC14,M02,System,Receive SIGINT,Server running,Database connections closed cleanly before exit,done
+UC15,M03,Developer,Send invalid request to any endpoint,Server running,"JSON error response {code, message} with correct HTTP status",done
+UC16,M03,Developer,Trigger internal server error,Server running,"500 response with generic message, details in server log only",done
+UC17,M04,Developer,GET /health,Server running,"200 with {status:ok, version:...}",done
+UC18,M04,Monitoring,GET /health when DB unavailable,DB connection lost,503 or degraded status returned,high
+UC19,M05,Developer,Send request with valid Bearer token,API key issued,Request processed normally,done
+UC20,M05,Developer,Send request without/with invalid token,Any state,401 Unauthorized returned,done
+UC21,M05,System,Store API key,Key generated,Only SHA-256 hash stored; plaintext never persisted,done
+UC22,M06,Developer,Send INSERT with read_only key,read_only key issued,403 Forbidden returned,done
+UC23,M06,Developer,Send DDL with read_write key,read_write key issued,403 Forbidden returned,done
+UC24,M06,Developer,Access project-B with project-A key,Project-scoped key for A,"403 Forbidden, cross-project access denied",done
+UC25,M07,Admin,POST /api/v1/projects/{id}/apikeys,Admin key valid,"New key created, plaintext returned once only",done
+UC26,M07,Admin,GET /api/v1/projects/{id}/apikeys,Keys exist,"Key list returned with metadata only, no token_hash",done
+UC27,M07,Admin,DELETE /api/v1/projects/{id}/apikeys/{keyId},Key exists,Key revoked (revoked_at set) not physically deleted,done
+UC28,M08,System,First startup with no keys,Empty api_keys table,"Admin key auto-generated, plaintext logged once",done
+UC29,M08,System,Subsequent startup,Admin key exists,No new key generated; no plaintext logged,done
+UC30,M09,Developer,PATCH /api/v1/projects/{id} with new state,Project exists and auth valid,Project state updated; updated_at refreshed,done
+UC31,M10,Developer,GET /api/v1/projects/{id}/stats,Project exists with data,"Response includes size, tables, backup_count, migration_version",done
+UC32,M11,Developer,GET /api/v1/projects/{id}/tables,Project has user tables,"List of table names returned, internal tables (__) excluded",done
+UC33,M12,Developer,GET /api/v1/projects/{id}/tables/{table},Table exists,Column info returned (cid/name/type/notnull/dflt_value/pk),done
+UC34,M17,Developer,Run slow SELECT (>5s),Default timeout 5s,"Query cancelled, error returned",done
+UC35,M17,Admin,Configure SDB_QUERY_TIMEOUT=10s,Env var set,Timeout extended to 10 seconds,done
+UC36,M27,Browser,Send preflight OPTIONS from different origin,CORS configured,Correct Access-Control headers returned,done
+UC37,M28,Developer,Send 2MB request body,Default 1MB limit,"413 Payload Too Large returned, body not processed",todo
+UC38,M29,System,Multiple rapid requests to same project,Connection cache active,Reuse existing DB connection instead of open/close per request,done
+UC39,M13,Admin,POST /api/v1/projects/{id}/backup,Project exists,"Backup file created in data/{id}/backups/ with timestamp name",done
+UC40,M14,Admin,Configure auto backup schedule,Backup scheduler started,Backup runs automatically at configured interval,done
+UC41,M15,Admin,POST /api/v1/projects/{id}/restore with backup name,Backup file exists,"DB replaced atomically via temp file + rename",done
+UC42,M16,System,Backup count exceeds retention limit,Max generations configured,Oldest backups pruned beyond limit,done
+UC43,M18,System,SQL request during backup,Backup in progress,"SQL request blocked or queued, not interleaved with backup",todo
+UC44,M18,System,Two backups requested simultaneously,First backup in progress,Second request gets 409 or waits for lock,todo
+UC45,M20a,System,Tokenize SQL with string literal containing keyword,SQL like: x = 'delete me',DELETE inside string NOT recognized as keyword token,done
+UC46,M20b,System,Tokenize escaped single quote,SQL like: 'it''s',String literal correctly includes escaped quote,done
+UC47,M20c,System,Classify WITH ... DELETE,WITH cte AS (SELECT 1) DELETE FROM t,Classified as edit (not read),done
+UC48,M20c,System,Detect stacked queries,SELECT 1; DROP TABLE t,Highest privilege (admin) detected across statements,done
+UC49,M30,Developer,Send project ID with ../,Request with ../../etc/passwd,"400 Bad Request, path traversal rejected",done
+UC50,M25,Developer,Send empty project name,POST /projects with name:'',"400 Bad Request, validation error message",done
+UC51,M26,System,Process any request,Server running,X-Request-ID header in response; same ID in server logs,done

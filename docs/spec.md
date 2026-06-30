@@ -1,4 +1,4 @@
-# SmartDB 要件定義書 v3.0
+# SmartDB 要件定義書 v3.1
 
 ## 1. 概要
 
@@ -245,12 +245,13 @@ Response
 POST /api/v1/projects/{project}/sql
 ```
 
+認証は `Authorization: Bearer <token>` ヘッダで行う（§7 参照）。
+
 Request
 
 ```json
 {
-  "token": "smartdb-xxxxxxxxx",
-  "query": "SELECT * FROM users"
+  "sql": "SELECT * FROM users"
 }
 ```
 
@@ -261,7 +262,7 @@ Response
   "success": true,
   "result": {
     "rows": [...],
-    "affectRows": 0,
+    "affectedRows": 0
   }
 }
 ```
@@ -487,7 +488,69 @@ Migration中
 
 ---
 
-# 12. v1.0 スコープ
+## セキュリティ
+
+* プロジェクトIDのバリデーション（`^[a-z0-9][a-z0-9_-]*$` のみ許可）
+* パス横断攻撃の防止（`../` を含むIDの拒否）
+* リクエストボディサイズ制限（デフォルト1MB）
+* SQL分類の正確性（GoATS構文解析による分類、§6 QueryJudge参照）
+
+---
+
+# 12. インフラ要件
+
+## 設定管理
+
+環境変数による設定。未指定時はデフォルト値を使用。
+
+| 環境変数 | デフォルト | 説明 |
+|---|---|---|
+| SDB_PORT | 8080 | HTTPサーバポート |
+| SDB_DATA_DIR | ./data | プロジェクトデータ格納先 |
+| SDB_LOG_LEVEL | info | ログレベル |
+| SDB_QUERY_TIMEOUT | 5s | SQLクエリタイムアウト |
+
+## Graceful Shutdown
+
+SIGTERM/SIGINT受信時、処理中リクエスト完了後にDB接続をクリーンに閉じる。
+
+## Health Check
+
+```http
+GET /health
+```
+
+Response
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.0"
+}
+```
+
+## エラーレスポンス形式
+
+全エンドポイント共通。
+
+```json
+{
+  "error": {
+    "code": "INVALID_PROJECT_NAME",
+    "message": "Project name must match [a-z0-9][a-z0-9_-]*"
+  }
+}
+```
+
+## Request ID
+
+全レスポンスに `X-Request-ID` ヘッダを付与。ログにも同IDを記録し、トレーサビリティを確保する。
+
+---
+
+# 13. v1.0 スコープ
+
+(旧§12)
 
 実装対象
 
@@ -512,7 +575,7 @@ Migration中
 
 ---
 
-# 13. v2候補
+# 14. v2候補
 
 * Job Queue
 * Workerシステム
@@ -525,7 +588,7 @@ Migration中
 
 ---
 
-# 14. 成功指標
+# 15. 成功指標
 
 * Docker Composeのみで起動可能
 * 5分以内に新規Project作成可能

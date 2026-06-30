@@ -1,0 +1,43 @@
+feature_id,feature_name,category,priority,phase,status,spec_section,dependencies,files_create,files_modify
+F01,Project Create,project,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/create.go"
+F02,Project List,project,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/systemdb.go"
+F03,Project Detail,project,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/systemdb.go"
+F04,Project Delete,project,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/systemdb.go"
+F05,SQL Query,sql,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/operate.go"
+F06,SQL Execute,sql,done,n/a,implemented,§6,,,"internal/api/v1/projects.go;internal/project/operate.go"
+F07,QueryJudge,sql,done,4,implemented,§6,M20c,,internal/project/operate.go
+F08,SystemDB Init,infra,done,n/a,implemented,-,,,cmd/smartdb/initialize.go
+F09,Migration Engine,migration,done,n/a,implemented,§8,,,internal/sqlite/migration.go
+F10,DSN Builder,infra,done,n/a,implemented,-,,,internal/domain/database.go
+F11,HandleJson Middleware,infra,done,n/a,implemented,-,,,internal/handler/middleware.go
+F12,Slug Generator,infra,done,n/a,implemented,-,,,internal/project/slug.go
+F13,DBTX Interface,infra,done,n/a,implemented,-,,,internal/domain/transaction.go
+F14,Project State Machine,project,done,n/a,implemented,-,,,internal/domain/project.go
+B01,GoATS Lexer,sql-safety,done,4,implemented,-,,,internal/ats/lexer.go
+M01,Config Management,foundation,critical,0,implemented,-,,internal/config/config.go,cmd/smartdb/main.go
+M02,Graceful Shutdown,foundation,critical,0,implemented,-,M01,,cmd/smartdb/main.go
+M03,Error Response Format,foundation,critical,0,implemented,-,,internal/handler/error.go,internal/api/v1/projects.go
+M04,Health Check,foundation,high,0,implemented,-,M01,,internal/api/v1/router.go
+M25,Input Validation,foundation,high,0,implemented,-,,internal/handler/validate.go,"internal/api/v1/projects.go;internal/project/create.go"
+M26,Request ID,foundation,medium,0,implemented,-,,internal/handler/request_id.go,cmd/smartdb/main.go
+M30,Path Traversal Protection,security,high,0,implemented,-,,,"internal/handler/validate.go"
+M05,Authentication,auth,critical,1,implemented,"§6;§7",M01;M03,"internal/auth/model.go;internal/auth/token.go;internal/auth/store.go;internal/auth/middleware.go",cmd/smartdb/initialize.go
+M06,Authorization,auth,critical,1,implemented,§7,M05,internal/auth/authorize.go,internal/api/v1/projects.go
+M07,API Key Endpoints,auth,critical,1,implemented,§6,M05,internal/api/v1/apikeys.go,internal/api/v1/router.go
+M08,API Key Bootstrap,auth,critical,1,implemented,-,M05,internal/auth/bootstrap.go,cmd/smartdb/main.go
+M09,Project Update,project,medium,2,implemented,§6,M05,,internal/api/v1/projects.go
+M10,Project Stats,project,medium,2,implemented,§6,M05,internal/project/stats.go,internal/api/v1/projects.go
+M11,Table List,sql,medium,2,implemented,§6,M05,,internal/api/v1/projects.go
+M12,Table Schema,sql,medium,2,implemented,§6,M05,,internal/api/v1/projects.go
+M17,Query Timeout,safety,high,2,implemented,-,M01,,internal/api/v1/projects.go
+M27,CORS,foundation,medium,2,implemented,-,M01,internal/handler/cors.go,internal/api/v1/router.go
+M28,Request Size Limit,foundation,medium,2,todo,-,,,internal/handler/middleware.go
+M29,DB Connection Cache,performance,medium,2,implemented,-,,internal/project/pool.go,
+M13,Manual Backup,backup,high,3,implemented,§9,,"internal/backup/backup.go;internal/api/v1/backup.go",internal/api/v1/router.go
+M14,Auto Backup,backup,medium,3,implemented,§9,M13,internal/backup/scheduler.go,
+M15,Restore,backup,high,3,implemented,§9,M13,"internal/backup/restore.go;internal/api/v1/backup.go",internal/api/v1/router.go
+M16,Backup Generations,backup,medium,3,implemented,§9,M13,internal/backup/retention.go,
+M18,Project Lock,safety,high,3,todo,-,,internal/project/lock.go,internal/project/operate.go
+M20a,Lexer Fix,sql-safety,medium,4,implemented,-,,,internal/ats/lexer.go
+M20b,STRING Token,sql-safety,medium,4,implemented,-,M20a,,internal/ats/lexer.go
+M20c,Classifier,sql-safety,medium,4,implemented,-,M20a;M20b,internal/ats/classifier.go,internal/project/operate.go
