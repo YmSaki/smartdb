@@ -75,7 +75,8 @@ func GetProjectDetailHandler(App *domain.App) http.HandlerFunc {
 	}
 }
 
-// RemoveProjectHandler sets state to deleted (actual wipe happens later).
+// RemoveProjectHandler sets state to deleted (actual wipe happens via
+// WipeProjectHandler, see wipe.go).
 func RemoveProjectHandler(App *domain.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectID := r.PathValue("project")
@@ -84,7 +85,23 @@ func RemoveProjectHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
-		err := project.UpdateProjectState(App.SystemDB, projectID, domain.StateDeleted)
+		current, err := project.GetProject(App.SystemDB, projectID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				handler.WriteError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist")
+			} else {
+				handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")
+			}
+			return
+		}
+
+		if !current.State.CanTransitionTo(domain.StateDeleted) {
+			handler.WriteError(w, http.StatusConflict, "INVALID_TRANSITION",
+				fmt.Sprintf("Cannot transition from %s to %s", current.State, domain.StateDeleted))
+			return
+		}
+
+		err = project.UpdateProjectState(App.SystemDB, projectID, domain.StateDeleted)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				slog.Warn("A non-existent project name was specified.")
@@ -131,6 +148,17 @@ func PatchProjectHandler(App *domain.App) http.HandlerFunc {
 			newState := domain.ProjectState(req.State)
 			if !newState.IsValid() {
 				handler.WriteError(w, http.StatusBadRequest, "INVALID_STATE", "Invalid project state")
+				return
+			}
+
+			// Deletion/wipe are fleet-management operations restricted to
+			// system keys via their own endpoints (DELETE .../{project} and
+			// POST .../{project}/wipe). PATCH — reachable by project-scoped
+			// keys too — must not be usable to reach the same states.
+			switch newState {
+			case domain.StateDeleted, domain.StateDeleting, domain.StateWiped:
+				handler.WriteError(w, http.StatusForbidden, "FORBIDDEN",
+					"Use DELETE /projects/{project} or /wipe to change to this state")
 				return
 			}
 

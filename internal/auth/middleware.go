@@ -50,8 +50,8 @@ func RequireSystemKey(db *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return requireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ac := GetAuthContext(r.Context())
-			if ac == nil || ac.ProjectID != nil {
-				handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "System admin key required")
+			if ac == nil || ac.ProjectID != nil || ac.Role != RoleSystem {
+				handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "System key required")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -68,6 +68,13 @@ func RequireProjectAccess(db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 			if ac.ProjectID == nil {
+				// Only a genuine system key (role=system) gets a universal
+				// pass across all projects. Anything else with a nil
+				// ProjectID would be a data invariant violation; fail closed.
+				if ac.Role != RoleSystem {
+					handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Access denied for this project")
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}

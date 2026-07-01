@@ -293,18 +293,38 @@ DELETE /api/v1/projects/{project}/apikeys/{id}
 
 # 7. 権限設計
 
-## Admin Key
+## System Key
 
-全権限
+`project_id = NULL`、ロールは常に `system`。DB単位(個々のプロジェクトのデータ)ではなく、より上位のフリート管理のためのキー。
 
 可能操作
 
 * Project作成
-* Project削除
+* Project一覧
+* Project削除(論理削除、state→deleted)
+* Project wipe(実データ削除、state→wiped)
+* プロジェクトへの初期APIキー発行(新規プロジェクトを誰も触れない状態にしないための例外)
+
+不可
+
+* SQL実行・Query
+* Backup / Restore
+
+起動時に `api_keys` テーブルにSystem Keyが存在しない場合、自動でブートストラップされる。`SDB_SYSTEM_TOKEN` 環境変数を指定すればそのトークンを使用し、未指定ならランダム生成してログに一度だけ出力する。追加のSystem Keyを発行するAPIは用意せず、必要な場合は環境変数側で管理する。
+
+---
+
+## Admin Key
+
+プロジェクト内での全権限(プロジェクトを跨いだ操作は不可)
+
+可能操作
+
 * Migration
 * Backup
 * Restore
 * Query
+* プロジェクト内APIキーの発行・失効
 
 ---
 
@@ -509,6 +529,7 @@ Migration中
 | SDB_DATA_DIR | ./data | プロジェクトデータ格納先 |
 | SDB_LOG_LEVEL | info | ログレベル |
 | SDB_QUERY_TIMEOUT | 5s | SQLクエリタイムアウト |
+| SDB_SYSTEM_TOKEN | (未指定時はランダム生成) | System Keyのトークンを固定したい場合に指定 |
 
 ## Graceful Shutdown
 

@@ -6,6 +6,10 @@ import "time"
 type Role string
 
 const (
+	// RoleSystem is exclusive to system-level keys (ProjectID == nil).
+	// It grants access to fleet-management operations (project lifecycle)
+	// but not to any individual project's data/SQL.
+	RoleSystem    Role = "system"
 	RoleAdmin     Role = "admin"
 	RoleReadWrite Role = "read_write"
 	RoleReadOnly  Role = "read_only"
