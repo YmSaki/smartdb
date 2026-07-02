@@ -96,6 +96,40 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 }
 
+func TestMaxBodyBytesDefault(t *testing.T) {
+	os.Unsetenv("SDB_MAX_BODY_BYTES")
+
+	cfg := LoadDefaults()
+	if cfg.MaxBodyBytes != 1<<20 {
+		t.Errorf("MaxBodyBytes default: got %d, want %d (1MB, per spec.md)", cfg.MaxBodyBytes, 1<<20)
+	}
+
+	cfg = Load()
+	if cfg.MaxBodyBytes != 1<<20 {
+		t.Errorf("Load() MaxBodyBytes without env: got %d, want %d", cfg.MaxBodyBytes, 1<<20)
+	}
+}
+
+func TestMaxBodyBytesFromEnv(t *testing.T) {
+	t.Cleanup(func() { os.Unsetenv("SDB_MAX_BODY_BYTES") })
+	os.Setenv("SDB_MAX_BODY_BYTES", "2048")
+
+	cfg := Load()
+	if cfg.MaxBodyBytes != 2048 {
+		t.Errorf("MaxBodyBytes from env: got %d, want 2048", cfg.MaxBodyBytes)
+	}
+}
+
+func TestMaxBodyBytesInvalidEnvKeepsDefault(t *testing.T) {
+	t.Cleanup(func() { os.Unsetenv("SDB_MAX_BODY_BYTES") })
+	os.Setenv("SDB_MAX_BODY_BYTES", "not-a-number")
+
+	cfg := Load()
+	if cfg.MaxBodyBytes != 1<<20 {
+		t.Errorf("MaxBodyBytes with invalid env: got %d, want default %d", cfg.MaxBodyBytes, 1<<20)
+	}
+}
+
 func TestLoadInvalidPort(t *testing.T) {
 	t.Helper()
 

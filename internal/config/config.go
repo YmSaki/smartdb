@@ -15,6 +15,7 @@ type Config struct {
 	BackupInterval time.Duration
 	BackupMaxGen   int
 	SystemToken    string
+	MaxBodyBytes   int64
 }
 
 // LoadDefaults returns a Config with default values, ignoring environment variables.
@@ -27,6 +28,7 @@ func LoadDefaults() *Config {
 		CORSOrigins:    "*",
 		BackupInterval: 24 * time.Hour,
 		BackupMaxGen:   7,
+		MaxBodyBytes:   1 << 20, // 1MB, per spec.md §11
 	}
 }
 
@@ -72,6 +74,12 @@ func Load() *Config {
 
 	if v := os.Getenv("SDB_SYSTEM_TOKEN"); v != "" {
 		cfg.SystemToken = v
+	}
+
+	if v := os.Getenv("SDB_MAX_BODY_BYTES"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.MaxBodyBytes = n
+		}
 	}
 
 	return cfg

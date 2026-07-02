@@ -11,6 +11,7 @@ import (
 
 	"smartdb/internal/config"
 	"smartdb/internal/domain"
+	"smartdb/internal/handler"
 	"smartdb/internal/project"
 
 	_ "modernc.org/sqlite"
@@ -73,6 +74,24 @@ func TestCreateProject(t *testing.T) {
 	}
 	if resp.ProjectID == "" {
 		t.Error("projectID is empty")
+	}
+}
+
+func TestCreateProjectRejectsOversizedBody(t *testing.T) {
+	app := setupProjectTestApp(t)
+
+	handler.SetMaxBodyBytes(32)
+	defer handler.SetMaxBodyBytes(1 << 20)
+
+	body := `{"name":"` + strings.Repeat("a", 200) + `"}`
+	req := httptest.NewRequest("POST", "/api/v1/projects", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	CreateProjectHandler(app).ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status code: got %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 
