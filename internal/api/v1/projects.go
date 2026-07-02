@@ -319,6 +319,13 @@ func ExecuteSQLHandler(App *domain.App) http.HandlerFunc {
 			}
 		}
 
+		release, ok := App.ProjectLocks.TryReadLock(projectId)
+		if !ok {
+			handler.WriteError(w, http.StatusConflict, "PROJECT_LOCKED", "A restore or migration is in progress for this project")
+			return
+		}
+		defer release()
+
 		ctx, cancel := context.WithTimeout(r.Context(), App.Config.QueryTimeout)
 		defer cancel()
 

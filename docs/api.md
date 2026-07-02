@@ -201,6 +201,8 @@ Response (200)
 
 POST /api/v1/projects/{project}/sql
 
+Restore/Migration中は409 `PROJECT_LOCKED`（§spec.md Project Lock参照）。
+
 Request
 
 ```json
@@ -291,7 +293,7 @@ Response: 204 No Content
 
 ## Backup & Restore
 
-いずれもプロジェクトのadminキーのみ実行可能(read_write/read_only/systemキーは403)。
+いずれもプロジェクトのadminキーのみ実行可能(read_write/read_only/systemキーは403)。Project Lock（§spec.md参照）によりRestore/Migrationと衝突する場合は409 `PROJECT_LOCKED`。
 
 ### Create Backup
 
@@ -341,6 +343,7 @@ Response: 204 No Content
 - `INVALID_PROJECT_ID` (400): ID不正/パス横断
 - `INVALID_SQL` (400): SQL分類失敗/空クエリ
 - `SQL_ERROR` (400): SQLite実行エラー
+- `PROJECT_LOCKED` (409): Restore/Migration中で対象Projectがロックされている（§Project Lock参照）
 
 ## ヘッダ
 

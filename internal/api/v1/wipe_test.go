@@ -53,7 +53,7 @@ func setupWipeTestApp(t *testing.T) *domain.App {
 	cfg := config.LoadDefaults()
 	cfg.DataDir = t.TempDir()
 
-	return &domain.App{SystemDB: db, Config: cfg}
+	return &domain.App{SystemDB: db, Config: cfg, ProjectLocks: domain.NewProjectLockRegistry()}
 }
 
 func TestWipeRequiresDeletedState(t *testing.T) {
