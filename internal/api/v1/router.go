@@ -26,6 +26,10 @@ func RouterMux(App *domain.App) *http.ServeMux {
 		"DELETE /projects/{project}",
 		auth.RequireSystemKey(App.SystemDB)(http.HandlerFunc(RemoveProjectHandler(App))),
 	)
+	mux.Handle(
+		"POST /projects/{project}/wipe",
+		auth.RequireSystemKey(App.SystemDB)(http.HandlerFunc(WipeProjectHandler(App))),
+	)
 
 	// Project detail / update — project or system key
 	mux.Handle(

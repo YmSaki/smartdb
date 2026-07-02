@@ -7,6 +7,8 @@ import (
 
 func CheckSQLPermission(role Role, sqlType project.SQLType) error {
 	switch role {
+	case RoleSystem:
+		return fmt.Errorf("system key cannot execute project SQL operations")
 	case RoleAdmin:
 		return nil
 	case RoleReadWrite:

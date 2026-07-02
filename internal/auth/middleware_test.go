@@ -23,7 +23,7 @@ func setupAuthMiddlewareTest(t *testing.T) *sql.DB {
 			project_id   TEXT,
 			name         TEXT NOT NULL,
 			token_hash   TEXT NOT NULL UNIQUE,
-			role         TEXT NOT NULL CHECK (role IN ('admin', 'read_write', 'read_only')),
+			role         TEXT NOT NULL CHECK (role IN ('system', 'admin', 'read_write', 'read_only')),
 			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
 			revoked_at   DATETIME
 		)
@@ -241,7 +241,7 @@ func TestRequireProjectAccessWithSystemKey(t *testing.T) {
 	hash := HashToken(token)
 	_, err := db.Exec(`
 		INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
-		VALUES ('key-1', NULL, 'System Key', ?, 'admin', datetime('now'), NULL)
+		VALUES ('key-1', NULL, 'System Key', ?, 'system', datetime('now'), NULL)
 	`, hash)
 	if err != nil {
 		t.Fatalf("failed to insert key: %v", err)
@@ -260,5 +260,62 @@ func TestRequireProjectAccessWithSystemKey(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("system key access denied: got %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireSystemKeyRejectsNonSystemRole(t *testing.T) {
+	db := setupAuthMiddlewareTest(t)
+
+	// A nil-ProjectID key that somehow isn't role=system (shouldn't happen
+	// via the API, but the middleware must fail closed if it ever does).
+	token := "sdb_admin_not_system_1234567"
+	hash := HashToken(token)
+	_, err := db.Exec(`
+		INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+		VALUES ('key-1', NULL, 'Not System', ?, 'admin', datetime('now'), NULL)
+	`, hash)
+	if err != nil {
+		t.Fatalf("failed to insert key: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/projects", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	handler := RequireSystemKey(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("non-system role on system endpoint: got %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireProjectAccessRejectsNonSystemNilProjectKey(t *testing.T) {
+	db := setupAuthMiddlewareTest(t)
+
+	token := "sdb_admin_not_system_7654321"
+	hash := HashToken(token)
+	_, err := db.Exec(`
+		INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+		VALUES ('key-1', NULL, 'Not System', ?, 'admin', datetime('now'), NULL)
+	`, hash)
+	if err != nil {
+		t.Fatalf("failed to insert key: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/projects/any-project/tables", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("project", "any-project")
+	w := httptest.NewRecorder()
+
+	handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("non-system nil-project key: got %d, want %d", w.Code, http.StatusForbidden)
 	}
 }

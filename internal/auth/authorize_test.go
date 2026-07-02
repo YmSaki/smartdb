@@ -64,6 +64,16 @@ func TestCheckSQLPermissionMatrix(t *testing.T) {
 	}
 }
 
+func TestCheckSQLPermissionSystemRoleDenied(t *testing.T) {
+	for _, st := range []project.SQLType{
+		project.SQLTypeRead, project.SQLTypeEdit, project.SQLTypeManage, project.SQLTypeAdmin,
+	} {
+		if err := CheckSQLPermission(RoleSystem, st); err == nil {
+			t.Errorf("system role should never be allowed to run project SQL (%s)", st)
+		}
+	}
+}
+
 func TestCheckSQLPermissionInvalidRole(t *testing.T) {
 	err := CheckSQLPermission(Role("superuser"), project.SQLTypeRead)
 	if err == nil {

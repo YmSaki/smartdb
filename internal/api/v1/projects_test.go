@@ -11,6 +11,7 @@ import (
 
 	"smartdb/internal/config"
 	"smartdb/internal/domain"
+	"smartdb/internal/project"
 
 	_ "modernc.org/sqlite"
 )
@@ -148,6 +149,52 @@ func TestDeleteProject(t *testing.T) {
 	}
 }
 
+func TestDeleteProjectRejectsInvalidTransition(t *testing.T) {
+	app := setupProjectTestApp(t)
+
+	if _, err := app.SystemDB.Exec(`
+		INSERT INTO projects (id, name, state) VALUES ('creating-project', 'p', 'creating')
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("DELETE", "/api/v1/projects/creating-project", nil)
+	req.SetPathValue("project", "creating-project")
+	w := httptest.NewRecorder()
+
+	RemoveProjectHandler(app).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("deleting a project still in 'creating': got %d, want %d (INVALID_TRANSITION)", w.Code, http.StatusConflict)
+	}
+}
+
+func TestDeleteProjectTwiceRejected(t *testing.T) {
+	app := setupProjectTestApp(t)
+
+	if _, err := app.SystemDB.Exec(`
+		INSERT INTO projects (id, name, state) VALUES ('active-project', 'p', 'active')
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("DELETE", "/api/v1/projects/active-project", nil)
+	req.SetPathValue("project", "active-project")
+	w := httptest.NewRecorder()
+	RemoveProjectHandler(app).ServeHTTP(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("first delete: got %d, want %d", w.Code, http.StatusNoContent)
+	}
+
+	req2 := httptest.NewRequest("DELETE", "/api/v1/projects/active-project", nil)
+	req2.SetPathValue("project", "active-project")
+	w2 := httptest.NewRecorder()
+	RemoveProjectHandler(app).ServeHTTP(w2, req2)
+	if w2.Code != http.StatusConflict {
+		t.Errorf("second delete on an already-deleted project: got %d, want %d", w2.Code, http.StatusConflict)
+	}
+}
+
 func TestUpdateProject(t *testing.T) {
 	body := `{"name":"updated-name"}`
 	req := httptest.NewRequest("PATCH", "/api/v1/projects/test-project", strings.NewReader(body))
@@ -156,6 +203,39 @@ func TestUpdateProject(t *testing.T) {
 
 	if req.Method != "PATCH" {
 		t.Errorf("method: got %s, want PATCH", req.Method)
+	}
+}
+
+func TestPatchProjectCannotSetDeletedOrWiped(t *testing.T) {
+	app := setupProjectTestApp(t)
+
+	if _, err := app.SystemDB.Exec(`
+		INSERT INTO projects (id, name, state) VALUES ('active-project', 'p', 'active')
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, state := range []string{"deleted", "deleting", "wiped"} {
+		body := `{"state":"` + state + `"}`
+		req := httptest.NewRequest("PATCH", "/api/v1/projects/active-project", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.SetPathValue("project", "active-project")
+		w := httptest.NewRecorder()
+
+		PatchProjectHandler(app).ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("PATCH state=%s: got %d, want %d (must go through DELETE/wipe)", state, w.Code, http.StatusForbidden)
+		}
+	}
+
+	// sanity: project should still be 'active', unaffected by the rejected attempts
+	p, err := project.GetProject(app.SystemDB, "active-project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.State != domain.StateActive {
+		t.Errorf("state should be unchanged: got %q, want %q", p.State, domain.StateActive)
 	}
 }
 

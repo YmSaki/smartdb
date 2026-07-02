@@ -108,6 +108,19 @@ func RevokeKeyForProject(db domain.DBTX, id string, projectID string) error {
 	return nil
 }
 
+// RevokeAllKeysForProject revokes every still-active key belonging to a
+// project in one shot. Used when a project is wiped, so any key issued
+// before the wipe stops working immediately.
+func RevokeAllKeysForProject(db domain.DBTX, projectID string) (int64, error) {
+	res, err := db.Exec(`
+		UPDATE api_keys SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), projectID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

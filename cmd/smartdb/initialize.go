@@ -40,7 +40,7 @@ func InitializeSystemDB(dbPath string) (*sql.DB, error) {
 			project_id   TEXT REFERENCES projects(id),
 			name         TEXT NOT NULL,
 			token_hash   TEXT NOT NULL UNIQUE,
-			role         TEXT NOT NULL CHECK (role IN ('admin', 'read_write', 'read_only')),
+			role         TEXT NOT NULL CHECK (role IN ('system', 'admin', 'read_write', 'read_only')),
 			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
 			revoked_at   DATETIME
 		)

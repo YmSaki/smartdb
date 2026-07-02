@@ -42,8 +42,8 @@ func CreateAPIKeyHandler(App *domain.App) http.HandlerFunc {
 		}
 
 		ac := auth.GetAuthContext(r.Context())
-		if ac != nil && ac.Role != auth.RoleAdmin {
-			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin keys can create new API keys")
+		if ac != nil && ac.Role != auth.RoleAdmin && ac.Role != auth.RoleSystem {
+			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin or system keys can create new API keys")
 			return
 		}
 

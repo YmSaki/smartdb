@@ -48,8 +48,8 @@ func main() {
 		Config:   cfg,
 	}
 
-	if err := auth.BootstrapAdminKey(db); err != nil {
-		slog.Error("Failed to bootstrap admin key", "error", err)
+	if err := auth.BootstrapSystemKey(db, cfg.SystemToken); err != nil {
+		slog.Error("Failed to bootstrap system key", "error", err)
 		os.Exit(1)
 	}
 

@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	Port             int
-	DataDir          string
-	LogLevel         string
-	QueryTimeout     time.Duration
-	CORSOrigins      string
-	BackupInterval   time.Duration
-	BackupMaxGen     int
+	Port           int
+	DataDir        string
+	LogLevel       string
+	QueryTimeout   time.Duration
+	CORSOrigins    string
+	BackupInterval time.Duration
+	BackupMaxGen   int
+	SystemToken    string
 }
 
 // LoadDefaults returns a Config with default values, ignoring environment variables.
@@ -67,6 +68,10 @@ func Load() *Config {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.BackupMaxGen = n
 		}
+	}
+
+	if v := os.Getenv("SDB_SYSTEM_TOKEN"); v != "" {
+		cfg.SystemToken = v
 	}
 
 	return cfg

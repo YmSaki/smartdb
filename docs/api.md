@@ -2,6 +2,18 @@
 
 認証: 特記なきエンドポイントは `Authorization: Bearer <token>` ヘッダ必須。
 
+## APIキーのロール
+
+APIキーは `project_id` の有無で「システムキー」と「プロジェクトキー」に大別され、ロールも別体系になっている。
+
+* **システムキー**(`project_id` = NULL): ロールは常に `system`。プロジェクトの作成・一覧・削除・wipe(§Projects参照)のみ実行可能。**個々のプロジェクトのSQL実行・バックアップ・リストア等、データそのものに触れる操作は一切できない**(意図的な設計。DB単位ではなく、より上位のプロジェクト管理のためのキー)。ただし新規プロジェクト作成直後にそのプロジェクト用の最初のAPIキーを発行する用途に限り、`POST /projects/{project}/apikeys` の呼び出しは許可されている。
+* **プロジェクトキー**(`project_id` = 対象プロジェクトID): ロールは `admin` / `read_write` / `read_only` のいずれか。SQL実行・バックアップ・API Key管理など、そのプロジェクト内の操作を行う。
+
+起動時、`api_keys` テーブルにシステムキーが1件も存在しない場合、自動的にブートストラップされる。
+
+* 環境変数 `SDB_SYSTEM_TOKEN` が設定されている場合、そのトークンをハッシュ化してシステムキーとして登録する(運用者が任意のトークンを固定できる)。
+* 未設定の場合、ランダムなトークンを生成し起動ログに一度だけ出力する。
+
 ---
 
 ## Health Check
@@ -87,7 +99,7 @@ Response (200)
 
 PATCH /api/v1/projects/{project}
 
-認証: システム管理キー必須。
+認証: システムキーまたは該当プロジェクトキー。
 
 Request
 
@@ -97,13 +109,33 @@ Request
 }
 ```
 
+`state` に `deleted` / `deleting` / `wiped` を指定することはできない(403)。これらは `DELETE /projects/{project}` と `POST /projects/{project}/wipe` (共にシステムキー限定)経由でのみ遷移可能。
+
 Response (200): 更新後のプロジェクト情報。
 
 ### Delete Project
 
 DELETE /api/v1/projects/{project}
 
-認証: システム管理キー必須。
+認証: システムキー必須。
+
+state を `deleted` に遷移させる論理削除。`domain.CanTransitionTo` により現在の state からの遷移が許可されている場合のみ成功する(例: `creating` からの直接削除や、二重削除は 409 `INVALID_TRANSITION`)。実データやAPIキーはこの時点ではまだ残る(下記 Wipe Project 参照)。
+
+Response: 204 No Content
+
+### Wipe Project
+
+POST /api/v1/projects/{project}/wipe
+
+認証: システムキー必須(プロジェクト側のadminキーでも不可)。
+
+対象プロジェクトが `deleted` 状態である場合のみ実行可能。以下を実施する:
+
+1. そのプロジェクトに紐づく全APIキーを失効
+2. プロジェクトディレクトリ(database.db・backups・migrations)をディスクから完全削除
+3. state を `wiped` に遷移
+
+`deleted` 以外の状態のプロジェクトに対しては 409 `INVALID_TRANSITION` を返す。
 
 Response: 204 No Content
 
