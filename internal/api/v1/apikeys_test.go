@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"smartdb/internal/auth"
 	"smartdb/internal/config"
 	"smartdb/internal/domain"
 
@@ -28,7 +29,7 @@ func setupAPIKeyTestApp(t *testing.T) *domain.App {
 			project_id TEXT,
 			name TEXT NOT NULL,
 			token_hash TEXT NOT NULL UNIQUE,
-			role TEXT NOT NULL CHECK (role IN ('admin', 'read_write', 'read_only')),
+			role TEXT NOT NULL CHECK (role IN ('system', 'admin', 'read_write', 'read_only')),
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			revoked_at DATETIME
 		)
@@ -189,6 +190,70 @@ func TestRevokeAPIKeyEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRevokeAPIKeyRoleEnforcement(t *testing.T) {
+	projectID := "test-project"
+
+	tests := []struct {
+		name           string
+		callerRole     auth.Role
+		expectedStatus int
+	}{
+		{"read_only cannot revoke", auth.RoleReadOnly, http.StatusForbidden},
+		{"read_write cannot revoke", auth.RoleReadWrite, http.StatusForbidden},
+		{"admin can revoke", auth.RoleAdmin, http.StatusNoContent},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupAPIKeyTestApp(t)
+			_, err := app.SystemDB.Exec(`
+				INSERT INTO api_keys (id, project_id, name, token_hash, role)
+				VALUES ('key-target', ?, 'Target', 'hash-target', 'admin')
+			`, projectID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req := httptest.NewRequest("DELETE", "/api/v1/projects/"+projectID+"/apikeys/key-target", nil)
+			req.SetPathValue("project", projectID)
+			req.SetPathValue("id", "key-target")
+			ac := &auth.AuthContext{KeyID: "caller", ProjectID: &projectID, Role: tt.callerRole}
+			req = req.WithContext(auth.WithAuthContext(req.Context(), ac))
+			w := httptest.NewRecorder()
+
+			RevokeAPIKeyHandler(app).ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("callerRole=%s: got %d, want %d, body=%s", tt.callerRole, w.Code, tt.expectedStatus, w.Body.String())
+			}
+		})
+	}
+
+	t.Run("system key can revoke", func(t *testing.T) {
+		app := setupAPIKeyTestApp(t)
+		_, err := app.SystemDB.Exec(`
+			INSERT INTO api_keys (id, project_id, name, token_hash, role)
+			VALUES ('key-target-2', ?, 'Target', 'hash-target-2', 'admin')
+		`, projectID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest("DELETE", "/api/v1/projects/"+projectID+"/apikeys/key-target-2", nil)
+		req.SetPathValue("project", projectID)
+		req.SetPathValue("id", "key-target-2")
+		ac := &auth.AuthContext{KeyID: "sys-caller", ProjectID: nil, Role: auth.RoleSystem}
+		req = req.WithContext(auth.WithAuthContext(req.Context(), ac))
+		w := httptest.NewRecorder()
+
+		RevokeAPIKeyHandler(app).ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("system key revoke: got %d, want %d, body=%s", w.Code, http.StatusNoContent, w.Body.String())
+		}
+	})
 }
 
 func TestAPIKeyResponseHasTokenOnce(t *testing.T) {
