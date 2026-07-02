@@ -512,7 +512,7 @@ Migration中
 
 * プロジェクトIDのバリデーション（`^[a-z0-9][a-z0-9_-]*$` のみ許可）
 * パス横断攻撃の防止（`../` を含むIDの拒否）
-* リクエストボディサイズ制限（デフォルト1MB）
+* リクエストボディサイズ制限（デフォルト1MB、`SDB_MAX_BODY_BYTES` で変更可。超過時は 413 Request Entity Too Large）
 * SQL分類の正確性（GoATS構文解析による分類、§6 QueryJudge参照）
 
 ---
@@ -530,6 +530,7 @@ Migration中
 | SDB_LOG_LEVEL | info | ログレベル |
 | SDB_QUERY_TIMEOUT | 5s | SQLクエリタイムアウト |
 | SDB_SYSTEM_TOKEN | (未指定時はランダム生成) | System Keyのトークンを固定したい場合に指定 |
+| SDB_MAX_BODY_BYTES | 1048576 (1MB) | リクエストボディサイズ上限（バイト） |
 
 ## Graceful Shutdown
 

@@ -36,6 +36,8 @@ func main() {
 	logger := slog.New(slogHandler)
 	slog.SetDefault(logger)
 
+	handler.SetMaxBodyBytes(cfg.MaxBodyBytes)
+
 	db, err := InitializeSystemDB(systemDB)
 	if err != nil {
 		slog.Error("Failed to initialize system database", "error", err)
