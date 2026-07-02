@@ -7,6 +7,7 @@ import (
 
 // App はシステムデータベースへのポインタと設定を保持する型です
 type App struct {
-	SystemDB *sql.DB
-	Config   *config.Config
+	SystemDB     *sql.DB
+	Config       *config.Config
+	ProjectLocks *ProjectLockRegistry
 }

@@ -22,6 +22,13 @@ func BackupHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
+		release, ok := App.ProjectLocks.TryReadLock(projectID)
+		if !ok {
+			handler.WriteError(w, http.StatusConflict, "PROJECT_LOCKED", "A restore or migration is in progress for this project")
+			return
+		}
+		defer release()
+
 		path, err := backup.CreateBackup(App.Config.DataDir, projectID)
 		if err != nil {
 			handler.WriteError(w, http.StatusInternalServerError, "BACKUP_FAILED", "Backup failed: "+err.Error())
@@ -55,6 +62,13 @@ func RestoreHandler(App *domain.App) http.HandlerFunc {
 			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin keys can restore from a backup")
 			return
 		}
+
+		release, ok := App.ProjectLocks.TryWriteLock(projectID)
+		if !ok {
+			handler.WriteError(w, http.StatusConflict, "PROJECT_LOCKED", "Another backup, restore, or migration is in progress for this project")
+			return
+		}
+		defer release()
 
 		if err := backup.RestoreBackup(App.Config.DataDir, projectID, req.Backup); err != nil {
 			handler.WriteError(w, http.StatusInternalServerError, "RESTORE_FAILED", "Restore failed: "+err.Error())

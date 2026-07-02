@@ -39,8 +39,9 @@ func setupProjectTestApp(t *testing.T) *domain.App {
 	}
 
 	return &domain.App{
-		SystemDB: db,
-		Config:   config.LoadDefaults(),
+		SystemDB:     db,
+		Config:       config.LoadDefaults(),
+		ProjectLocks: domain.NewProjectLockRegistry(),
 	}
 }
 

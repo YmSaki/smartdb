@@ -490,13 +490,12 @@ POST /api/v1/projects/{project}/restore
 
 ## Project Lock
 
-Backup中
+プロジェクトIDごとにプロセス内ロック（共有/排他）を保持する。
 
-Restore中
+* **共有ロック**（同時に複数保持可）: 通常のSQL実行（Query/Execute）、Backup（`VACUUM INTO`はWALのスナップショットを取るため通常SQLと干渉しない）
+* **排他ロック**（保持中は他の共有・排他ロックを一切許可しない）: Restore、Migration
 
-Migration中
-
-は対象Projectをロックする
+ロックを即座に取得できない場合は待機せず `409 Conflict`（`PROJECT_LOCKED`）を返す。別プロジェクトのロックとは独立。
 
 ---
 

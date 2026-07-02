@@ -46,8 +46,9 @@ func main() {
 	defer db.Close()
 
 	app := &domain.App{
-		SystemDB: db,
-		Config:   cfg,
+		SystemDB:     db,
+		Config:       cfg,
+		ProjectLocks: domain.NewProjectLockRegistry(),
 	}
 
 	if err := auth.BootstrapSystemKey(db, cfg.SystemToken); err != nil {

@@ -45,7 +45,7 @@ func setupBackupTestApp(t *testing.T) (*domain.App, string) {
 		t.Fatal(err)
 	}
 
-	app := &domain.App{SystemDB: db, Config: cfg}
+	app := &domain.App{SystemDB: db, Config: cfg, ProjectLocks: domain.NewProjectLockRegistry()}
 	return app, projectID
 }
 
