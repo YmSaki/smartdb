@@ -15,6 +15,13 @@ func GetAuthContext(ctx context.Context) *AuthContext {
 	return ac
 }
 
+// WithAuthContext attaches an AuthContext to ctx the same way requireAuth
+// does. Mainly useful for tests that exercise a handler directly without
+// going through the full RequireAuth/RequireProjectAccess middleware chain.
+func WithAuthContext(ctx context.Context, ac *AuthContext) context.Context {
+	return context.WithValue(ctx, authContextKey{}, ac)
+}
+
 func requireAuth(db *sql.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := extractBearer(r)

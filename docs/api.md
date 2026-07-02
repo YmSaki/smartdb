@@ -281,6 +281,8 @@ Response (200)
 
 DELETE /api/v1/projects/{project}/apikeys/{id}
 
+認証: プロジェクトのadminキーまたはsystemキーのみ(read_write/read_onlyキーは403)。
+
 Response: 204 No Content
 
 論理削除 (`revoked_at` 設定)。物理削除はしない。
@@ -288,6 +290,8 @@ Response: 204 No Content
 ---
 
 ## Backup & Restore
+
+いずれもプロジェクトのadminキーのみ実行可能(read_write/read_only/systemキーは403)。
 
 ### Create Backup
 
@@ -297,7 +301,7 @@ Response (200)
 
 ```json
 {
-  "backup": "database_20260101_120000.db"
+  "backup": "20260101-120000-a1b2c3d4.db"
 }
 ```
 
@@ -309,17 +313,11 @@ Request
 
 ```json
 {
-  "backup": "database_20260101_120000.db"
+  "backup": "20260101-120000-a1b2c3d4.db"
 }
 ```
 
-Response (200)
-
-```json
-{
-  "restored": "database_20260101_120000.db"
-}
-```
+Response: 204 No Content
 
 ---
 
