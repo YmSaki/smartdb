@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"smartdb/internal/auth"
 	"smartdb/internal/backup"
 	"smartdb/internal/domain"
 	"smartdb/internal/handler"
@@ -12,6 +13,12 @@ func BackupHandler(App *domain.App) http.HandlerFunc {
 		projectID := r.PathValue("project")
 		if err := handler.ValidateProjectID(projectID); err != nil {
 			handler.WriteError(w, http.StatusBadRequest, "INVALID_PROJECT_ID", err.Error())
+			return
+		}
+
+		ac := auth.GetAuthContext(r.Context())
+		if ac != nil && ac.Role != auth.RoleAdmin {
+			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin keys can create backups")
 			return
 		}
 
@@ -40,6 +47,12 @@ func RestoreHandler(App *domain.App) http.HandlerFunc {
 		}
 		if req.Backup == "" {
 			handler.WriteError(w, http.StatusBadRequest, "INVALID_BACKUP", "Backup name is required")
+			return
+		}
+
+		ac := auth.GetAuthContext(r.Context())
+		if ac != nil && ac.Role != auth.RoleAdmin {
+			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin keys can restore from a backup")
 			return
 		}
 

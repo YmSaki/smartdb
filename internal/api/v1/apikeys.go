@@ -123,6 +123,12 @@ func RevokeAPIKeyHandler(App *domain.App) http.HandlerFunc {
 			return
 		}
 
+		ac := auth.GetAuthContext(r.Context())
+		if ac != nil && ac.Role != auth.RoleAdmin && ac.Role != auth.RoleSystem {
+			handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Only admin or system keys can revoke API keys")
+			return
+		}
+
 		err := auth.RevokeKeyForProject(App.SystemDB, keyID, projectID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {

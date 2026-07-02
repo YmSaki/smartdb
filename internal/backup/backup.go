@@ -1,7 +1,9 @@
 package backup
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +13,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// backupSuffix returns a short random hex string appended to backup
+// filenames so two backups requested within the same second don't collide.
+func backupSuffix() string {
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func CreateBackup(dataDir string, projectID string) (string, error) {
 	backupDir := filepath.Join(dataDir, projectID, "backups")
 
@@ -19,7 +29,7 @@ func CreateBackup(dataDir string, projectID string) (string, error) {
 	}
 
 	timestamp := time.Now().UTC().Format("20060102-150405")
-	backupName := fmt.Sprintf("%s.db", timestamp)
+	backupName := fmt.Sprintf("%s-%s.db", timestamp, backupSuffix())
 	dstPath := filepath.Join(backupDir, backupName)
 
 	srcDSN := domain.GetDataBaseDSN(filepath.Join(dataDir, projectID, "database.db"))
