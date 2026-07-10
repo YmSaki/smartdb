@@ -393,6 +393,11 @@ func TestExecuteSQL(t *testing.T) {
 			body:           `{"sql":"VACUUM INTO '../other-project/database.db'"}`,
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name:           "VACUUM INTO with quoted schema-name is rejected",
+			body:           `{"sql":"VACUUM \"main\" INTO '../other-project/database.db'"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {

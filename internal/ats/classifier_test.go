@@ -76,6 +76,13 @@ func TestClassifySQLVacuumIntoRejected(t *testing.T) {
 		"VACUUM INTO '/data/project-b/database.db'",
 		"vacuum into 'x.db'",
 		"VACUUM main INTO 'x.db'",
+		// A quoted schema-name (any of SQLite's three quoting styles) or a
+		// single-quoted string used as an identifier (SQLite's documented
+		// fallback) must not let VACUUM INTO slip past as a bare VACUUM.
+		`VACUUM "main" INTO '/data/project-b/database.db'`,
+		"VACUUM `main` INTO '/data/project-b/database.db'",
+		"VACUUM [main] INTO '/data/project-b/database.db'",
+		"VACUUM 'main' INTO '/data/project-b/database.db'",
 	}
 	for _, sql := range tests {
 		t.Run(sql, func(t *testing.T) {
@@ -88,7 +95,14 @@ func TestClassifySQLVacuumIntoRejected(t *testing.T) {
 }
 
 func TestClassifySQLBareVacuumAllowed(t *testing.T) {
-	tests := []string{"VACUUM", "VACUUM main"}
+	tests := []string{
+		"VACUUM",
+		"VACUUM main",
+		`VACUUM "main"`,
+		"VACUUM `main`",
+		"VACUUM [main]",
+		"VACUUM 'main'",
+	}
 	for _, sql := range tests {
 		t.Run(sql, func(t *testing.T) {
 			cat, err := ClassifySQL(sql)

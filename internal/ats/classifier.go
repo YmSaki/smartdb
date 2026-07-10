@@ -99,16 +99,24 @@ func resolveWithBody(l *Lexer) []TokenType {
 
 // hasIntoClause reports whether a VACUUM statement includes an INTO
 // clause: `VACUUM [schema-name] INTO filename`. It looks ahead at most two
-// tokens (the optional bare schema-name, then INTO) and always pushes
-// what it consumed back onto the lexer, so callers can keep scanning
-// normally regardless of the result.
+// tokens (the optional schema-name, then INTO) and always pushes what it
+// consumed back onto the lexer, so callers can keep scanning normally
+// regardless of the result.
+//
+// schema-name may be a bare identifier (WORD), a quoted identifier
+// (IDENT — "name", `name`, or [name]), or — per SQLite's documented
+// single-quoted-string-as-identifier fallback, confirmed against a real
+// SQLite engine — a STRING ('name'). All three are equally valid ways to
+// spell the same schema-name and must be treated alike here; missing any
+// one of them lets `VACUUM <quoted-form> INTO 'path'` slip past as if it
+// were a harmless bare VACUUM.
 func hasIntoClause(l *Lexer) bool {
 	first := l.NextToken()
 	if first.Type == INTO {
 		l.unread(first)
 		return true
 	}
-	if first.Type != WORD {
+	if first.Type != WORD && first.Type != IDENT && first.Type != STRING {
 		l.unread(first)
 		return false
 	}

@@ -10,6 +10,7 @@ const (
 
 	WORD   TokenType = "WORD"
 	STRING TokenType = "STRING"
+	IDENT  TokenType = "IDENT"
 
 	ALTER   TokenType = "ALTER"
 	ANALYZE TokenType = "ANALYZE"
@@ -97,6 +98,12 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: SEMICOLON, Literal: ";"}
 	case ch == '\'':
 		return l.readString()
+	case ch == '"':
+		return l.readQuotedIdent('"', true)
+	case ch == '`':
+		return l.readQuotedIdent('`', true)
+	case ch == '[':
+		return l.readQuotedIdent(']', false)
 	case isWordChar(ch):
 		word := l.readWord()
 		return classify(word)
@@ -104,6 +111,38 @@ func (l *Lexer) NextToken() Token {
 		l.pos++
 		return Token{Type: SYMBOL, Literal: string(ch)}
 	}
+}
+
+// readQuotedIdent consumes a SQLite quoted identifier — "name", `name`, or
+// [name] — as a single IDENT token, the same way readString consumes a
+// 'string' literal as one STRING token. Any code that peeks ahead for an
+// identifier-shaped token (e.g. the classifier's VACUUM schema-name
+// lookahead) must treat IDENT the same as WORD, or quoting a name becomes
+// a way to slip past keyword-based checks unnoticed.
+//
+// closeCh is the delimiter that ends the identifier ('"' and '`' close
+// themselves; '[' closes on ']'). doubledEscape controls whether a
+// doubled closing delimiter inside the identifier is an escaped literal
+// character (true for " and `) or ends it immediately (false for [,
+// which SQLite doesn't support escaping within).
+func (l *Lexer) readQuotedIdent(closeCh byte, doubledEscape bool) Token {
+	var buf strings.Builder
+	buf.WriteByte(l.input[l.pos])
+	l.pos++ // skip opening delimiter
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		l.pos++
+		buf.WriteByte(ch)
+		if ch == closeCh {
+			if doubledEscape && l.pos < len(l.input) && l.input[l.pos] == closeCh {
+				buf.WriteByte(closeCh)
+				l.pos++
+				continue
+			}
+			return Token{Type: IDENT, Literal: buf.String()}
+		}
+	}
+	return Token{Type: IDENT, Literal: buf.String()}
 }
 
 func (l *Lexer) readString() Token {

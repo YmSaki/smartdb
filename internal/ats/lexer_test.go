@@ -81,6 +81,35 @@ func TestStringLiteralDoesNotLeakKeyword(t *testing.T) {
 	}
 }
 
+func TestQuotedIdentifiersRecognized(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		literal string
+	}{
+		{"double-quoted", `"main"`, `"main"`},
+		{"backtick-quoted", "`main`", "`main`"},
+		{"bracket-quoted", "[main]", "[main]"},
+		{"double-quoted with doubled-quote escape", `"ma""in"`, `"ma""in"`},
+		{"backtick-quoted with doubled-backtick escape", "`ma``in`", "`ma``in`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			tok := l.NextToken()
+			if tok.Type != IDENT {
+				t.Fatalf("type: got=%q want=IDENT", tok.Type)
+			}
+			if tok.Literal != tt.literal {
+				t.Errorf("literal: got=%q want=%q", tok.Literal, tt.literal)
+			}
+			if next := l.NextToken(); next.Type != EOF {
+				t.Errorf("expected EOF after identifier, got %q", next.Type)
+			}
+		})
+	}
+}
+
 func TestVacuumIntoKeywordsRecognized(t *testing.T) {
 	got := collectTypes(t, "VACUUM INTO 'x.db'")
 	want := []TokenType{VACUUM, INTO, STRING, EOF}
