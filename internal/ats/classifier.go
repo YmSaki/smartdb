@@ -28,6 +28,35 @@ func ClassifySQL(input string) (SQLCategory, error) {
 			continue
 		}
 		if findingLeader {
+			// No valid SQLite statement begins with a bare symbol or an
+			// illegal byte - real SQLite would reject such input outright.
+			// If our lexer produces one here anyway, it means either the
+			// input truly is malformed (safe to reject) or - the more
+			// dangerous case - it's a byte our skipSpace doesn't recognize
+			// as whitespace but the real SQLite tokenizer does, silently
+			// consuming this statement-leader slot and letting the actual
+			// keyword right after it dodge the ATTACH/VACUUM checks below
+			// entirely (see PR #19 review, which found exactly this gap
+			// for \v/\f). Fail closed on anything we don't recognize
+			// rather than let it default through categorizeKeyword.
+			if tok.Type == SYMBOL || tok.Type == ILLEGAL {
+				return "", fmt.Errorf("unrecognized leading token in SQL statement")
+			}
+			// ATTACH lets a key open any file the process can read/write —
+			// including other projects' database.db or system.db — as a
+			// schema it can then query/modify, bypassing project isolation
+			// entirely. There's no safe subset of ATTACH to allow, so it's
+			// rejected outright rather than merely categorized.
+			if tok.Type == ATTACH {
+				return "", fmt.Errorf("ATTACH is not permitted")
+			}
+			// VACUUM INTO writes a full copy of the database to an
+			// arbitrary path (unlike bare VACUUM, which only rewrites the
+			// current database file in place), making it an arbitrary-file
+			// write primitive with the same isolation-bypass risk as ATTACH.
+			if tok.Type == VACUUM && hasIntoClause(l) {
+				return "", fmt.Errorf("VACUUM INTO is not permitted")
+			}
 			stmtKeywords = append(stmtKeywords, tok.Type)
 			if tok.Type == WITH {
 				// WITH is a CTE prefix; the real statement keyword follows.
@@ -82,6 +111,35 @@ func resolveWithBody(l *Lexer) []TokenType {
 	}
 }
 
+// hasIntoClause reports whether a VACUUM statement includes an INTO
+// clause: `VACUUM [schema-name] INTO filename`. It looks ahead at most two
+// tokens (the optional schema-name, then INTO) and always pushes what it
+// consumed back onto the lexer, so callers can keep scanning normally
+// regardless of the result.
+//
+// schema-name may be a bare identifier (WORD), a quoted identifier
+// (IDENT — "name", `name`, or [name]), or — per SQLite's documented
+// single-quoted-string-as-identifier fallback, confirmed against a real
+// SQLite engine — a STRING ('name'). All three are equally valid ways to
+// spell the same schema-name and must be treated alike here; missing any
+// one of them lets `VACUUM <quoted-form> INTO 'path'` slip past as if it
+// were a harmless bare VACUUM.
+func hasIntoClause(l *Lexer) bool {
+	first := l.NextToken()
+	if first.Type == INTO {
+		l.unread(first)
+		return true
+	}
+	if first.Type != WORD && first.Type != IDENT && first.Type != STRING {
+		l.unread(first)
+		return false
+	}
+	second := l.NextToken()
+	l.unread(second)
+	l.unread(first)
+	return second.Type == INTO
+}
+
 func categorizeKeyword(tt TokenType) SQLCategory {
 	switch tt {
 	case SELECT, WITH:
@@ -90,7 +148,7 @@ func categorizeKeyword(tt TokenType) SQLCategory {
 		return CategoryEdit
 	case PRAGMA, ANALYZE, REINDEX, EXPLAIN:
 		return CategoryManage
-	case CREATE, DROP, ALTER, ATTACH:
+	case CREATE, DROP, ALTER:
 		return CategoryAdmin
 	default:
 		return CategoryAdmin

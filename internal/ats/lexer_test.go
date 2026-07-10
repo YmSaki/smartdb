@@ -81,6 +81,79 @@ func TestStringLiteralDoesNotLeakKeyword(t *testing.T) {
 	}
 }
 
+func TestSkipSpaceMatchesSQLiteWhitespaceSet(t *testing.T) {
+	// sqlite3Isspace treats 0x09-0x0D (\t \n \v \f \r) and 0x20 (space) as
+	// insignificant whitespace. Any gap here lets that byte surface as a
+	// stray SYMBOL/ILLEGAL token instead of being skipped.
+	for _, ws := range []byte{'\t', '\n', '\v', '\f', '\r', ' '} {
+		l := New(string(ws) + "SELECT")
+		tok := l.NextToken()
+		if tok.Type != SELECT {
+			t.Errorf("byte %#x before SELECT: got type=%q, want SELECT", ws, tok.Type)
+		}
+	}
+}
+
+func TestQuotedIdentifiersRecognized(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		literal string
+	}{
+		{"double-quoted", `"main"`, `"main"`},
+		{"backtick-quoted", "`main`", "`main`"},
+		{"bracket-quoted", "[main]", "[main]"},
+		{"double-quoted with doubled-quote escape", `"ma""in"`, `"ma""in"`},
+		{"backtick-quoted with doubled-backtick escape", "`ma``in`", "`ma``in`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			tok := l.NextToken()
+			if tok.Type != IDENT {
+				t.Fatalf("type: got=%q want=IDENT", tok.Type)
+			}
+			if tok.Literal != tt.literal {
+				t.Errorf("literal: got=%q want=%q", tok.Literal, tt.literal)
+			}
+			if next := l.NextToken(); next.Type != EOF {
+				t.Errorf("expected EOF after identifier, got %q", next.Type)
+			}
+		})
+	}
+}
+
+func TestVacuumIntoKeywordsRecognized(t *testing.T) {
+	got := collectTypes(t, "VACUUM INTO 'x.db'")
+	want := []TokenType{VACUUM, INTO, STRING, EOF}
+	if len(got) != len(want) {
+		t.Fatalf("got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("pos %d: got=%q want=%q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestUnreadReplaysInOrder(t *testing.T) {
+	l := New("A B C")
+	first := l.NextToken()  // A
+	second := l.NextToken() // B
+	l.unread(second)
+	l.unread(first)
+
+	if tok := l.NextToken(); tok.Literal != "A" {
+		t.Fatalf("first replayed token: got=%q want=A", tok.Literal)
+	}
+	if tok := l.NextToken(); tok.Literal != "B" {
+		t.Fatalf("second replayed token: got=%q want=B", tok.Literal)
+	}
+	if tok := l.NextToken(); tok.Literal != "C" {
+		t.Fatalf("token after replay resumes from lexer: got=%q want=C", tok.Literal)
+	}
+}
+
 func TestStringEscapedQuote(t *testing.T) {
 	l := New("'it''s ok'")
 	tok := l.NextToken()
