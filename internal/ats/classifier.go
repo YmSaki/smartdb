@@ -28,6 +28,21 @@ func ClassifySQL(input string) (SQLCategory, error) {
 			continue
 		}
 		if findingLeader {
+			// ATTACH lets a key open any file the process can read/write —
+			// including other projects' database.db or system.db — as a
+			// schema it can then query/modify, bypassing project isolation
+			// entirely. There's no safe subset of ATTACH to allow, so it's
+			// rejected outright rather than merely categorized.
+			if tok.Type == ATTACH {
+				return "", fmt.Errorf("ATTACH is not permitted")
+			}
+			// VACUUM INTO writes a full copy of the database to an
+			// arbitrary path (unlike bare VACUUM, which only rewrites the
+			// current database file in place), making it an arbitrary-file
+			// write primitive with the same isolation-bypass risk as ATTACH.
+			if tok.Type == VACUUM && hasIntoClause(l) {
+				return "", fmt.Errorf("VACUUM INTO is not permitted")
+			}
 			stmtKeywords = append(stmtKeywords, tok.Type)
 			if tok.Type == WITH {
 				// WITH is a CTE prefix; the real statement keyword follows.
@@ -80,6 +95,27 @@ func resolveWithBody(l *Lexer) []TokenType {
 			return []TokenType{tok.Type}
 		}
 	}
+}
+
+// hasIntoClause reports whether a VACUUM statement includes an INTO
+// clause: `VACUUM [schema-name] INTO filename`. It looks ahead at most two
+// tokens (the optional bare schema-name, then INTO) and always pushes
+// what it consumed back onto the lexer, so callers can keep scanning
+// normally regardless of the result.
+func hasIntoClause(l *Lexer) bool {
+	first := l.NextToken()
+	if first.Type == INTO {
+		l.unread(first)
+		return true
+	}
+	if first.Type != WORD {
+		l.unread(first)
+		return false
+	}
+	second := l.NextToken()
+	l.unread(second)
+	l.unread(first)
+	return second.Type == INTO
 }
 
 func categorizeKeyword(tt TokenType) SQLCategory {

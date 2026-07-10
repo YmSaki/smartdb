@@ -383,6 +383,16 @@ func TestExecuteSQL(t *testing.T) {
 			body:           `{"sql":""}`,
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name:           "ATTACH is rejected",
+			body:           `{"sql":"ATTACH DATABASE '../other-project/database.db' AS victim"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "VACUUM INTO is rejected",
+			body:           `{"sql":"VACUUM INTO '../other-project/database.db'"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {

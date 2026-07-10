@@ -81,6 +81,37 @@ func TestStringLiteralDoesNotLeakKeyword(t *testing.T) {
 	}
 }
 
+func TestVacuumIntoKeywordsRecognized(t *testing.T) {
+	got := collectTypes(t, "VACUUM INTO 'x.db'")
+	want := []TokenType{VACUUM, INTO, STRING, EOF}
+	if len(got) != len(want) {
+		t.Fatalf("got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("pos %d: got=%q want=%q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestUnreadReplaysInOrder(t *testing.T) {
+	l := New("A B C")
+	first := l.NextToken()  // A
+	second := l.NextToken() // B
+	l.unread(second)
+	l.unread(first)
+
+	if tok := l.NextToken(); tok.Literal != "A" {
+		t.Fatalf("first replayed token: got=%q want=A", tok.Literal)
+	}
+	if tok := l.NextToken(); tok.Literal != "B" {
+		t.Fatalf("second replayed token: got=%q want=B", tok.Literal)
+	}
+	if tok := l.NextToken(); tok.Literal != "C" {
+		t.Fatalf("token after replay resumes from lexer: got=%q want=C", tok.Literal)
+	}
+}
+
 func TestStringEscapedQuote(t *testing.T) {
 	l := New("'it''s ok'")
 	tok := l.NextToken()

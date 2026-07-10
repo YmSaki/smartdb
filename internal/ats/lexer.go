@@ -19,11 +19,13 @@ const (
 	DROP    TokenType = "DROP"
 	EXPLAIN TokenType = "EXPLAIN"
 	INSERT  TokenType = "INSERT"
+	INTO    TokenType = "INTO"
 	PRAGMA  TokenType = "PRAGMA"
 	REINDEX TokenType = "REINDEX"
 	REPLACE TokenType = "REPLACE"
 	SELECT  TokenType = "SELECT"
 	UPDATE  TokenType = "UPDATE"
+	VACUUM  TokenType = "VACUUM"
 	VALUES  TokenType = "VALUES"
 	WITH    TokenType = "WITH"
 
@@ -41,11 +43,13 @@ var keywords = map[string]TokenType{
 	"DROP":    DROP,
 	"EXPLAIN": EXPLAIN,
 	"INSERT":  INSERT,
+	"INTO":    INTO,
 	"PRAGMA":  PRAGMA,
 	"REINDEX": REINDEX,
 	"REPLACE": REPLACE,
 	"SELECT":  SELECT,
 	"UPDATE":  UPDATE,
+	"VACUUM":  VACUUM,
 	"VALUES":  VALUES,
 	"WITH":    WITH,
 }
@@ -58,13 +62,28 @@ type Token struct {
 type Lexer struct {
 	input string
 	pos   int
+	buf   []Token
 }
 
 func New(input string) *Lexer {
 	return &Lexer{input: input, pos: 0}
 }
 
+// unread pushes tok back onto the lexer so the next NextToken call
+// returns it again. Tokens are replayed LIFO, so a caller that reads
+// several tokens ahead and wants to put them all back must unread them
+// in reverse of the order it read them.
+func (l *Lexer) unread(tok Token) {
+	l.buf = append(l.buf, tok)
+}
+
 func (l *Lexer) NextToken() Token {
+	if n := len(l.buf); n > 0 {
+		tok := l.buf[n-1]
+		l.buf = l.buf[:n-1]
+		return tok
+	}
+
 	l.skipSpace()
 	if l.pos >= len(l.input) {
 		return Token{Type: EOF}

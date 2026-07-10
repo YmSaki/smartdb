@@ -55,6 +55,53 @@ func TestClassifySQLEmpty(t *testing.T) {
 	}
 }
 
+func TestClassifySQLAttachRejected(t *testing.T) {
+	tests := []string{
+		"ATTACH DATABASE '/data/project-b/database.db' AS victim",
+		"attach database 'x.db' as x",
+		"SELECT 1; ATTACH DATABASE 'x.db' AS x",
+	}
+	for _, sql := range tests {
+		t.Run(sql, func(t *testing.T) {
+			_, err := ClassifySQL(sql)
+			if err == nil {
+				t.Errorf("ClassifySQL(%q) should error, got nil", sql)
+			}
+		})
+	}
+}
+
+func TestClassifySQLVacuumIntoRejected(t *testing.T) {
+	tests := []string{
+		"VACUUM INTO '/data/project-b/database.db'",
+		"vacuum into 'x.db'",
+		"VACUUM main INTO 'x.db'",
+	}
+	for _, sql := range tests {
+		t.Run(sql, func(t *testing.T) {
+			_, err := ClassifySQL(sql)
+			if err == nil {
+				t.Errorf("ClassifySQL(%q) should error, got nil", sql)
+			}
+		})
+	}
+}
+
+func TestClassifySQLBareVacuumAllowed(t *testing.T) {
+	tests := []string{"VACUUM", "VACUUM main"}
+	for _, sql := range tests {
+		t.Run(sql, func(t *testing.T) {
+			cat, err := ClassifySQL(sql)
+			if err != nil {
+				t.Fatalf("ClassifySQL(%q) unexpected error: %v", sql, err)
+			}
+			if cat != CategoryAdmin {
+				t.Errorf("ClassifySQL(%q) = %q, want %q", sql, cat, CategoryAdmin)
+			}
+		})
+	}
+}
+
 func TestClassifySQLStringInjection(t *testing.T) {
 	// DELETE inside string literal should not affect classification
 	cat, err := ClassifySQL("SELECT * FROM t WHERE name = 'DELETE FROM t'")

@@ -227,7 +227,12 @@ SQL分類 (GoATS):
 - read (SELECT, WITH+SELECT): rows 返却
 - edit (INSERT, UPDATE, DELETE): affectedRows 返却
 - manage (PRAGMA, EXPLAIN): rows 返却
-- admin (CREATE, DROP, ALTER): affectedRows 返却
+- admin (CREATE, DROP, ALTER, VACUUM): affectedRows 返却
+- 実行不可 (400 `INVALID_SQL`): `ATTACH` / `VACUUM INTO`。プロジェクトの
+  admin キーであっても、プロセスが読み書きできる任意のファイル（他プロジェクトの
+  database.db や system.db を含む）に到達できてしまうため、adminロールでも
+  実行を許可しない。素の `VACUUM`（INTO句なし、対象DBファイル内で完結する
+  最適化コマンド）は admin カテゴリとして実行可能。
 
 ---
 
