@@ -134,7 +134,7 @@ func categorizeKeyword(tt TokenType) SQLCategory {
 		return CategoryEdit
 	case PRAGMA, ANALYZE, REINDEX, EXPLAIN:
 		return CategoryManage
-	case CREATE, DROP, ALTER, ATTACH:
+	case CREATE, DROP, ALTER:
 		return CategoryAdmin
 	default:
 		return CategoryAdmin
