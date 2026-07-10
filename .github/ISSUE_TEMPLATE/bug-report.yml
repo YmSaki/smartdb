@@ -1,0 +1,55 @@
+name: バグ報告
+description: 期待と異なる挙動の報告
+labels: ["bug"]
+body:
+  - type: textarea
+    id: actual
+    attributes:
+      label: 現状の挙動
+      description: 何が起きたか。エラーメッセージ・レスポンスは原文のまま貼る。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する挙動
+      description: 本来どうあるべきか。根拠となるドキュメント（README.md、docs/spec.md、docs/api.md）があれば示す。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      description: 最小の再現手順。APIリクエスト（curl等）か、パッケージ単体のGoコードで。
+      placeholder: |
+        1. POST /api/v1/projects でプロジェクトを作成し、projectID を控える
+        2. POST /api/v1/projects/{projectID}/apikeys で admin キーを発行
+        3. curl -H "Authorization: Bearer <token>" -X POST \
+             http://localhost:8080/api/v1/projects/{projectID}/sql \
+             -d '{"sql": "..."}'
+        4. → 期待するレスポンスと実際のレスポンスの差分
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 環境
+      description: OS / go version / SDB_* 環境変数の非デフォルト設定 / コミットハッシュ
+      placeholder: Ubuntu 22.04 / go1.26.4 / SDB_QUERY_TIMEOUT=30s / 2969ebe
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響
+      description: >
+        プロジェクト間のデータ分離破り・認証/権限バイパス・データ破損（Restore/Migration系）を
+        伴うか。伴う場合は最優先で扱う。
+      placeholder: 表示上の問題のみ。他プロジェクトのデータやAPIキー権限への影響は無い。
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: 回帰テストの当たり
+      description: 修正時にどのテストを足すべきか。空欄でも起票可（トリアージbotが補完提案する）。

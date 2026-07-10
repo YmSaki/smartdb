@@ -1,0 +1,63 @@
+name: 実装タスク
+description: 機能追加・改善・負債返済などの作業単位
+labels: ["task"]
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: なぜ必要か。どのドキュメント（README.md / docs/spec.md / docs/api.md）や既存issueに紐づくか。
+      placeholder: |
+        例: read_write キーが manage系SQL(PRAGMA等)を実行できてしまい、
+        docs/spec.md §7 のRead/Writeロール定義と食い違っている。
+        根拠: docs/spec.md §7「権限設計」
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: 何ができたらこのissueを閉じられるか。検証可能な形で箇条書き。
+      placeholder: |
+        - [ ] read_write キーでPRAGMA実行時に403が返る
+        - [ ] admin キーでは従来通り実行できる
+        - [ ] go test ./... green
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影響範囲（触るパッケージ）
+      multiple: true
+      options:
+        - internal/auth
+        - internal/api/v1
+        - internal/project
+        - internal/backup
+        - internal/ats
+        - internal/domain
+        - internal/handler
+        - internal/config
+        - internal/sqlite
+        - cmd/smartdb
+        - docs/
+        - .github/（CI・issueテンプレート）
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: テスト観点
+      description: >
+        解決に必要なテストの当たり。認証境界(System Key / Project Keyのadmin・read_write・
+        read_only)に触るなら各ロールでのテストの要否、Project Lock(共有/排他)の並行性の
+        考慮が要るか。空欄でも起票可（トリアージbotが補完提案する）。
+      placeholder: |
+        - [ ] 単体テスト: read_write / admin 両ロールでの実行結果をカバー
+        - [ ] Project Lock への影響: 無し
+        - [ ] 並行性: 対象外
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: 設計上の注意点、依存する他issue、参考リンクなど。
