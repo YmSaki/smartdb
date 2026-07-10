@@ -28,6 +28,20 @@ func ClassifySQL(input string) (SQLCategory, error) {
 			continue
 		}
 		if findingLeader {
+			// No valid SQLite statement begins with a bare symbol or an
+			// illegal byte - real SQLite would reject such input outright.
+			// If our lexer produces one here anyway, it means either the
+			// input truly is malformed (safe to reject) or - the more
+			// dangerous case - it's a byte our skipSpace doesn't recognize
+			// as whitespace but the real SQLite tokenizer does, silently
+			// consuming this statement-leader slot and letting the actual
+			// keyword right after it dodge the ATTACH/VACUUM checks below
+			// entirely (see PR #19 review, which found exactly this gap
+			// for \v/\f). Fail closed on anything we don't recognize
+			// rather than let it default through categorizeKeyword.
+			if tok.Type == SYMBOL || tok.Type == ILLEGAL {
+				return "", fmt.Errorf("unrecognized leading token in SQL statement")
+			}
 			// ATTACH lets a key open any file the process can read/write —
 			// including other projects' database.db or system.db — as a
 			// schema it can then query/modify, bypassing project isolation

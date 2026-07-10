@@ -81,6 +81,19 @@ func TestStringLiteralDoesNotLeakKeyword(t *testing.T) {
 	}
 }
 
+func TestSkipSpaceMatchesSQLiteWhitespaceSet(t *testing.T) {
+	// sqlite3Isspace treats 0x09-0x0D (\t \n \v \f \r) and 0x20 (space) as
+	// insignificant whitespace. Any gap here lets that byte surface as a
+	// stray SYMBOL/ILLEGAL token instead of being skipped.
+	for _, ws := range []byte{'\t', '\n', '\v', '\f', '\r', ' '} {
+		l := New(string(ws) + "SELECT")
+		tok := l.NextToken()
+		if tok.Type != SELECT {
+			t.Errorf("byte %#x before SELECT: got type=%q, want SELECT", ws, tok.Type)
+		}
+	}
+}
+
 func TestQuotedIdentifiersRecognized(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -191,7 +191,13 @@ func isWordChar(ch byte) bool {
 func (l *Lexer) skipSpace() {
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
-		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+		// Matches SQLite's own sqlite3Isspace: 0x09-0x0D and 0x20. Missing
+		// any of these (e.g. \v/\f, 0x0B/0x0C) would make the lexer treat
+		// the byte as a stray SYMBOL token instead of skipping it - and
+		// that stray token would then consume ClassifySQL's
+		// statement-leader slot, letting the real keyword right after it
+		// dodge the ATTACH/VACUUM checks entirely (see PR #19 review).
+		if ch == ' ' || (ch >= '\t' && ch <= '\r') {
 			l.pos++
 			continue
 		}

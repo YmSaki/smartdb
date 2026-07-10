@@ -1,6 +1,9 @@
 package ats
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestClassifySQL(t *testing.T) {
 	tests := []struct {
@@ -111,6 +114,43 @@ func TestClassifySQLBareVacuumAllowed(t *testing.T) {
 			}
 			if cat != CategoryAdmin {
 				t.Errorf("ClassifySQL(%q) = %q, want %q", sql, cat, CategoryAdmin)
+			}
+		})
+	}
+}
+
+func TestClassifySQLControlCharLeaderRejected(t *testing.T) {
+	// \v (0x0B) and \f (0x0C) are whitespace to SQLite's own tokenizer
+	// (sqlite3Isspace covers 0x09-0x0D) but were not to ours, so a stray
+	// SYMBOL token for one of them could silently consume the
+	// statement-leader slot and let the real ATTACH/VACUUM right after it
+	// dodge the checks entirely. skipSpace now recognizes them (so they
+	// behave as ordinary leading whitespace); this also exercises the
+	// fail-closed guard for any other unrecognized leading byte.
+	tests := []string{
+		"\fVACUUM INTO '/data/project-b/database.db'",
+		"\vVACUUM INTO '/data/project-b/database.db'",
+		"\fATTACH DATABASE '/data/project-b/database.db' AS x",
+	}
+	for _, sql := range tests {
+		t.Run(sql, func(t *testing.T) {
+			_, err := ClassifySQL(sql)
+			if err == nil {
+				t.Errorf("ClassifySQL(%q) should error, got nil", sql)
+			}
+		})
+	}
+}
+
+func TestClassifySQLLegitLeadingWhitespaceAllowed(t *testing.T) {
+	for _, ws := range []string{" ", "\t", "\n", "\r", "\v", "\f"} {
+		t.Run(fmt.Sprintf("%q", ws), func(t *testing.T) {
+			cat, err := ClassifySQL(ws + "SELECT 1")
+			if err != nil {
+				t.Fatalf("ClassifySQL(%q) unexpected error: %v", ws+"SELECT 1", err)
+			}
+			if cat != CategoryRead {
+				t.Errorf("ClassifySQL(%q) = %q, want %q", ws+"SELECT 1", cat, CategoryRead)
 			}
 		})
 	}
