@@ -1,0 +1,105 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, ready_for_review]
+
+# 同一PRへの連続pushでは古いレビューを中断して最新だけ走らせる
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # draft PRはレビューしない（ready_for_review で拾う）
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # レビュー中に検証コマンドを実行できるようにする
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          use_sticky_comment: true
+          track_progress: true
+          prompt: |
+            このPRをレビューし、レビュー後に未解決事項のissue化まで行ってください。
+
+            ## 手順
+
+            ### 1. 文脈の取得
+            - `gh pr view ${{ github.event.pull_request.number }} --json title,body` でPR本文を読む。
+            - PR本文の `Closes #N` / `Fixes #N` / `#N` 参照から紐づくissueを特定し、
+              `gh issue view N` で受け入れ条件を読む。紐づくissueが無い場合は
+              「issue紐付けなし」とレビュー冒頭に明記し、diffの意図をPR本文から推定して続行する。
+            - README.md と docs/ 配下（spec.md / api.md / auth.md）を読み、既存の設計・
+              権限モデル・エラーコード規約と整合するか判断材料にする。
+
+            ### 2. プロジェクト固有の不変条件チェック
+            - 認証境界: System Key（project_id=NULL, role=system）と Project Key
+              （admin / read_write / read_only）の権限境界が崩れていないか。
+              `internal/auth/middleware.go` の RequireSystemKey / RequireProjectAccess が
+              外れていないか、`internal/auth/authorize.go` の CheckSQLPermission と
+              GoATS（`internal/ats`）のSQL分類（read/edit/manage/admin）が食い違って
+              いないか。
+            - プロジェクト分離: `internal/project` / `internal/backup` がファイルパス
+              （SQLite DSN、バックアップパス、Restore対象パス）を組み立てる箇所で、
+              他プロジェクトのディレクトリや system.db に到達できる経路
+              （パストラバーサル、ATTACH DATABASE / VACUUM INTO 等）が新たに開いていないか。
+            - Project Lock: Restore/Migration（排他ロック）と通常SQL/Backup（共有ロック）が
+              `domain.ProjectLockRegistry` を正しく経由しているか（docs/spec.md §11）。
+            - レイヤー方向: `internal/domain` が `internal/auth` / `internal/project` /
+              `internal/backup` 等の上位パッケージに依存する形になっていないか。
+            - スキーマ変更: システムDB（`cmd/smartdb/initialize.go` の projects / api_keys
+              テーブル）やプロジェクトDBのマイグレーション（`internal/sqlite/migration.go`）
+              の変更が、既存データへの後方互換を壊さないか。
+
+            ### 3. 一般品質チェック
+            - 命名・責務分離・コメントの適切さ（このリポジトリの既存コードの流儀に合わせる。
+              WHYが非自明でない限りコメントは不要という方針からの逸脱を指摘）。
+            - セキュリティ: 信頼境界をまたぐ入力検証、パス走査、SQL実行経路。
+            - テスト: issueの受け入れ条件に対応するテストが存在し、境界・異常系を
+              含むか。`go vet ./...` と `go test ./...` を(必ずこの引数構成の
+              まま、他のフラグを付けずに)実際に実行し結果をレビューに含める。
+            - パフォーマンス: 明確に立証できる非効率（O(n²)化、リクエスト毎の不要な
+              DB再接続等）のみ指摘する。推測ベースの最適化提案はしない。
+            - スコープ: 紐づくissueの範囲外のコード・ドキュメント変更が混入して
+              いないか。混入があれば列挙する。
+
+            ### 4. レビュー出力
+            - 指摘は blocking / non-blocking / nit の3段階に分類する。
+            - 各指摘に、再現条件または該当行と、根拠（実行結果・docs参照）を付ける。
+            - コード行に対する指摘はinlineコメントで、総評はstickyコメントに書く。
+
+            ### 5. issue管理（レビュー後に必ず実施）
+            - non-blocking指摘のうちこのPRで直すべきでないもの（設計負債・後続作業）は、
+              `gh issue list --search` で重複が無いことを確認したうえで
+              `scripts/gh-issue-create.sh "<タイトル>" "<本文>"` でissue化する
+              （ラベル `from-review` はスクリプト内で固定付与される）。タイトルは
+              「対象パッケージ: 内容」形式の日本語、本文に発生元PR番号
+              (#${{ github.event.pull_request.number }}) と該当ファイル・行、
+              修正の受け入れ条件を書く。`gh issue create` を直接呼ばないこと —
+              このスクリプトはタイトル・本文の2引数のみを受け取る固定引数
+              ラッパーで、`--body-file`/`-F` 等のファイル読み込み系フラグが
+              そもそも渡せない（ランナー上の任意ファイルの中身をissue本文として
+              公開してしまう経路を、プロンプト文中の指示ではなく引数構成自体で
+              塞いでいる）。
+            - 起票したissueの一覧をstickyコメント末尾に「後続issue」として列挙する。
+            - blocking指摘はissue化せず、このPRで修正すべきものとして明示する。
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 75
+            --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(scripts/gh-issue-create.sh:*),Bash(git diff:*),Bash(git log:*),Bash(go test ./...),Bash(go vet ./...),Bash(gofmt:*),mcp__github_inline_comment__create_inline_comment"
