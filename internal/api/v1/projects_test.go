@@ -420,9 +420,9 @@ func TestExecuteSQL(t *testing.T) {
 // TestExecuteSQLRoleEnforcement exercises CheckSQLPermission through the
 // actual HTTP handler wiring (AuthContext -> ExecuteSQLHandler), rather
 // than unit-testing CheckSQLPermission in isolation (see
-// internal/auth/authorize_test.go). This is what pins down #17 end to
-// end: a read_write key must not be able to reach PRAGMA/manage SQL via
-// the real request path, not just in the permission-check function alone.
+// internal/auth/authorize_test.go) - a role restriction only matters if
+// the wiring that enforces it is actually exercised end to end, not just
+// the permission-check function on its own.
 func TestExecuteSQLRoleEnforcement(t *testing.T) {
 	app := setupProjectTestApp(t)
 
