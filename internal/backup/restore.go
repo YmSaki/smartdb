@@ -35,6 +35,29 @@ func RestoreBackup(dataDir string, projectID string, backupName string) error {
 		return fmt.Errorf("replace database: %w", err)
 	}
 
+	// The file just replaced was running under WAL (see
+	// domain.GetDataBaseDSN), so any -wal/-shm sidecars next to it belong
+	// to the pre-restore database and hold pre-restore transactions. Left
+	// in place, the next connection opened against the restored file would
+	// replay them, silently undoing the restore (or corrupting the file if
+	// the page layouts no longer match). RestoreBackup runs under the
+	// project's exclusive lock and this project has no persistent
+	// connection pool (queries open/close per call - see #13), so nothing
+	// can be holding these files open at this point.
+	if err := removeIfExists(dbPath + "-wal"); err != nil {
+		return fmt.Errorf("remove stale wal file: %w", err)
+	}
+	if err := removeIfExists(dbPath + "-shm"); err != nil {
+		return fmt.Errorf("remove stale shm file: %w", err)
+	}
+
+	return nil
+}
+
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 
