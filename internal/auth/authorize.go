@@ -13,10 +13,10 @@ func CheckSQLPermission(role Role, sqlType project.SQLType) error {
 		return nil
 	case RoleReadWrite:
 		switch sqlType {
-		case project.SQLTypeRead, project.SQLTypeEdit, project.SQLTypeManage:
+		case project.SQLTypeRead, project.SQLTypeEdit:
 			return nil
 		default:
-			return fmt.Errorf("read_write key cannot execute admin operations")
+			return fmt.Errorf("read_write key cannot execute %s operations", sqlType)
 		}
 	case RoleReadOnly:
 		switch sqlType {
