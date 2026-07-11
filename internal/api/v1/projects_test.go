@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"smartdb/internal/auth"
 	"smartdb/internal/config"
 	"smartdb/internal/domain"
 	"smartdb/internal/handler"
@@ -411,6 +412,67 @@ func TestExecuteSQL(t *testing.T) {
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("status code: got %d, want %d, body: %s", w.Code, tt.expectedStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestExecuteSQLRoleEnforcement exercises CheckSQLPermission through the
+// actual HTTP handler wiring (AuthContext -> ExecuteSQLHandler), rather
+// than unit-testing CheckSQLPermission in isolation (see
+// internal/auth/authorize_test.go). This is what pins down #17 end to
+// end: a read_write key must not be able to reach PRAGMA/manage SQL via
+// the real request path, not just in the permission-check function alone.
+func TestExecuteSQLRoleEnforcement(t *testing.T) {
+	app := setupProjectTestApp(t)
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	projectID := "role-enforcement-project"
+	projectDir := "data/" + projectID
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	pdb, err := sql.Open("sqlite", projectDir+"/database.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdb.Close()
+
+	tests := []struct {
+		name           string
+		role           auth.Role
+		sql            string
+		expectedStatus int
+	}{
+		{"admin can run PRAGMA (manage)", auth.RoleAdmin, "PRAGMA table_info(sqlite_master)", http.StatusOK},
+		{"read_write cannot run PRAGMA (manage)", auth.RoleReadWrite, "PRAGMA table_info(sqlite_master)", http.StatusForbidden},
+		{"read_only cannot run PRAGMA (manage)", auth.RoleReadOnly, "PRAGMA table_info(sqlite_master)", http.StatusForbidden},
+		{"read_write can still run SELECT (read)", auth.RoleReadWrite, "SELECT 1", http.StatusOK},
+		{"read_only cannot run INSERT (edit)", auth.RoleReadOnly, "INSERT INTO nonexistent DEFAULT VALUES", http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"sql":"` + tt.sql + `"}`
+			req := httptest.NewRequest("POST", "/api/v1/projects/"+projectID+"/sql", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.SetPathValue("project", projectID)
+			req = withRole(req, projectID, tt.role)
+			w := httptest.NewRecorder()
+
+			ExecuteSQLHandler(app).ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("role=%s sql=%q: got %d, want %d, body=%s", tt.role, tt.sql, w.Code, tt.expectedStatus, w.Body.String())
 			}
 		})
 	}
