@@ -303,12 +303,14 @@ DELETE /api/v1/projects/{project}/apikeys/{id}
 * Project一覧
 * Project削除(論理削除、state→deleted)
 * Project wipe(実データ削除、state→wiped)
-* プロジェクトへの初期APIキー発行(新規プロジェクトを誰も触れない状態にしないための例外)
+* 任意のアクティブなプロジェクトへのAPIキー発行・失効(`POST`/`DELETE /projects/{project}/apikeys/...`)。新規プロジェクト作成直後の初回キー発行に限定されず、運用上の緊急アクセス手段としていつでも呼び出せる。
 
-不可
+不可(直接には)
 
 * SQL実行・Query
 * Backup / Restore
+
+上記の「不可」操作にSystem Keyが直接到達するAPIは無いが、System Keyは任意のプロジェクトに`admin`ロールのキーを自分で発行できるため、そのキーを使えばワンステップでSQL実行・Backup・Restoreに到達できる。System Keyはフリート管理者向けの最上位キーであり、この経路は意図した設計として許容している。
 
 起動時に `api_keys` テーブルにSystem Keyが存在しない場合、自動でブートストラップされる。`SDB_SYSTEM_TOKEN` 環境変数を指定すればそのトークンを使用し、未指定ならランダム生成してログに一度だけ出力する。追加のSystem Keyを発行するAPIは用意せず、必要な場合は環境変数側で管理する。
 
