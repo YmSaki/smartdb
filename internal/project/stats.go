@@ -48,7 +48,7 @@ func GetProjectStats(ctx context.Context, dataDir string, projectID string) (*Pr
 	stats.Size = pageCount * pageSize
 
 	if err := db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE '__%%'",
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE '\_\_%' ESCAPE '\'`,
 	).Scan(&stats.Tables); err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func GetTables(ctx context.Context, dataDir string, projectID string) ([]string,
 	defer db.Close()
 
 	rows, err := db.QueryContext(ctx,
-		"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '__%%' ORDER BY name",
+		`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\_\_%' ESCAPE '\' ORDER BY name`,
 	)
 	if err != nil {
 		return nil, err
