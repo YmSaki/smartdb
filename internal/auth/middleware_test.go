@@ -440,3 +440,41 @@ func TestRequireProjectAccessActiveAndInactiveProjectsAllowed(t *testing.T) {
 		})
 	}
 }
+
+// TestRequireProjectAccessSystemKeyBypassesDeletedCheck guards the
+// emergency-access invariant docs/spec.md §7 documents: System Key's
+// project access (notably apikeys issue/revoke, see #14/#25) is
+// unconditional and must not be blocked by the deleted/wiped check that
+// applies to a project's own Project Key.
+func TestRequireProjectAccessSystemKeyBypassesDeletedCheck(t *testing.T) {
+	for _, state := range []string{"deleted", "wiped"} {
+		t.Run(state, func(t *testing.T) {
+			db := setupAuthMiddlewareTest(t)
+			insertTestProject(t, db, "gone-project", state)
+
+			token := "sdb_system_" + state + "_1234567"
+			hash := HashToken(token)
+			_, err := db.Exec(`
+				INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+				VALUES ('key-1', NULL, 'System Key', ?, 'system', datetime('now'), NULL)
+			`, hash)
+			if err != nil {
+				t.Fatalf("failed to insert key: %v", err)
+			}
+
+			req := httptest.NewRequest("POST", "/api/projects/gone-project/apikeys", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.SetPathValue("project", "gone-project")
+			w := httptest.NewRecorder()
+
+			handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("system key on %s project: got %d, want %d, body=%s", state, w.Code, http.StatusOK, w.Body.String())
+			}
+		})
+	}
+}
