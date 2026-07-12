@@ -234,6 +234,11 @@ SQL分類 (GoATS):
   実行を許可しない。素の `VACUUM`（INTO句なし、対象DBファイル内で完結する
   最適化コマンド）は admin カテゴリとして実行可能。
 
+ロール別の実行可否（`internal/auth/authorize.go` `CheckSQLPermission`）:
+- `admin`: read / edit / manage / admin すべて実行可能。
+- `read_write`: read / edit のみ実行可能。manage（`PRAGMA`等）・admin は403 `FORBIDDEN`。
+- `read_only`: read のみ実行可能。edit・manage・admin は403 `FORBIDDEN`。
+
 ---
 
 ## API Keys

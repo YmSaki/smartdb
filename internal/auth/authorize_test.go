@@ -19,7 +19,7 @@ func TestCheckSQLPermission(t *testing.T) {
 
 		{"read_write can read", RoleReadWrite, project.SQLTypeRead, false},
 		{"read_write can edit", RoleReadWrite, project.SQLTypeEdit, false},
-		{"read_write can manage", RoleReadWrite, project.SQLTypeManage, false},
+		{"read_write cannot manage", RoleReadWrite, project.SQLTypeManage, true},
 		{"read_write cannot admin", RoleReadWrite, project.SQLTypeAdmin, true},
 
 		{"read_only can read", RoleReadOnly, project.SQLTypeRead, false},
@@ -44,7 +44,7 @@ func TestCheckSQLPermissionMatrix(t *testing.T) {
 
 	allowed := map[Role]map[project.SQLType]bool{
 		RoleAdmin:     {project.SQLTypeRead: true, project.SQLTypeEdit: true, project.SQLTypeManage: true, project.SQLTypeAdmin: true},
-		RoleReadWrite: {project.SQLTypeRead: true, project.SQLTypeEdit: true, project.SQLTypeManage: true, project.SQLTypeAdmin: false},
+		RoleReadWrite: {project.SQLTypeRead: true, project.SQLTypeEdit: true, project.SQLTypeManage: false, project.SQLTypeAdmin: false},
 		RoleReadOnly:  {project.SQLTypeRead: true, project.SQLTypeEdit: false, project.SQLTypeManage: false, project.SQLTypeAdmin: false},
 	}
 
