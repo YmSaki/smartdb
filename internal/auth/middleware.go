@@ -3,8 +3,11 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
+	"smartdb/internal/domain"
 	"smartdb/internal/handler"
+	"smartdb/internal/project"
 	"strings"
 )
 
@@ -82,14 +85,36 @@ func RequireProjectAccess(db *sql.DB) func(http.Handler) http.Handler {
 					handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Access denied for this project")
 					return
 				}
-				next.ServeHTTP(w, r)
-				return
+			} else {
+				projectID := r.PathValue("project")
+				if projectID != "" && *ac.ProjectID != projectID {
+					handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Access denied for this project")
+					return
+				}
 			}
-			projectID := r.PathValue("project")
-			if projectID != "" && *ac.ProjectID != projectID {
-				handler.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Access denied for this project")
-				return
+
+			// A deleted/wiped project is treated as if it no longer
+			// exists: without this, a key issued before DELETE keeps full
+			// SQL/Backup/Restore/API-key access until wipe actually runs
+			// (see #26). Checked here, once, so every route this
+			// middleware guards gets it instead of relying on each
+			// handler to remember.
+			if projectID := r.PathValue("project"); projectID != "" {
+				proj, err := project.GetProject(db, projectID)
+				if err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						handler.WriteError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist")
+						return
+					}
+					handler.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error")
+					return
+				}
+				if proj.State == domain.StateDeleted || proj.State == domain.StateWiped {
+					handler.WriteError(w, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist")
+					return
+				}
 			}
+
 			next.ServeHTTP(w, r)
 		}))
 	}

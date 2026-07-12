@@ -32,8 +32,29 @@ func setupAuthMiddlewareTest(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create table: %v", err)
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS projects (
+			id           TEXT PRIMARY KEY,
+			name         TEXT NOT NULL,
+			state        TEXT NOT NULL CHECK (state IN ('creating', 'inactive', 'active', 'deleting', 'deleted', 'wiped')) DEFAULT 'creating',
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create projects table: %v", err)
+	}
+
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func insertTestProject(t *testing.T, db *sql.DB, id string, state string) {
+	t.Helper()
+	_, err := db.Exec(`INSERT INTO projects (id, name, state) VALUES (?, ?, ?)`, id, id, state)
+	if err != nil {
+		t.Fatalf("failed to insert project %s: %v", id, err)
+	}
 }
 
 func TestRequireAuthNoHeader(t *testing.T) {
@@ -247,9 +268,12 @@ func TestRequireProjectAccessWithSystemKey(t *testing.T) {
 		t.Fatalf("failed to insert key: %v", err)
 	}
 
+	insertTestProject(t, db, "any-project", "active")
+
 	// System key should access any project
 	req := httptest.NewRequest("GET", "/api/projects/any-project/tables", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("project", "any-project")
 	w := httptest.NewRecorder()
 
 	handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -317,5 +341,102 @@ func TestRequireProjectAccessRejectsNonSystemNilProjectKey(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("non-system nil-project key: got %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireProjectAccessDeletedOrWipedProjectReturns404(t *testing.T) {
+	for _, state := range []string{"deleted", "wiped"} {
+		t.Run(state, func(t *testing.T) {
+			db := setupAuthMiddlewareTest(t)
+			insertTestProject(t, db, "gone-project", state)
+
+			token := "sdb_admin_" + state + "_1234567"
+			hash := HashToken(token)
+			_, err := db.Exec(`
+				INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+				VALUES ('key-1', 'gone-project', 'Project Key', ?, 'admin', datetime('now'), NULL)
+			`, hash)
+			if err != nil {
+				t.Fatalf("failed to insert key: %v", err)
+			}
+
+			req := httptest.NewRequest("GET", "/api/projects/gone-project/tables", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.SetPathValue("project", "gone-project")
+			w := httptest.NewRecorder()
+
+			handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusNotFound {
+				t.Errorf("%s project: got %d, want %d, body=%s", state, w.Code, http.StatusNotFound, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestRequireProjectAccessNonexistentProjectReturns404(t *testing.T) {
+	db := setupAuthMiddlewareTest(t)
+
+	// No row inserted into projects at all - the key references a
+	// project_id that was never created (or was hard-deleted out from
+	// under it).
+	token := "sdb_admin_nonexistent_1234567"
+	hash := HashToken(token)
+	_, err := db.Exec(`
+		INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+		VALUES ('key-1', 'never-existed', 'Project Key', ?, 'admin', datetime('now'), NULL)
+	`, hash)
+	if err != nil {
+		t.Fatalf("failed to insert key: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/projects/never-existed/tables", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.SetPathValue("project", "never-existed")
+	w := httptest.NewRecorder()
+
+	handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("nonexistent project: got %d, want %d, body=%s", w.Code, http.StatusNotFound, w.Body.String())
+	}
+}
+
+func TestRequireProjectAccessActiveAndInactiveProjectsAllowed(t *testing.T) {
+	for _, state := range []string{"active", "inactive"} {
+		t.Run(state, func(t *testing.T) {
+			db := setupAuthMiddlewareTest(t)
+			insertTestProject(t, db, "live-project", state)
+
+			token := "sdb_admin_" + state + "_1234567"
+			hash := HashToken(token)
+			_, err := db.Exec(`
+				INSERT INTO api_keys (id, project_id, name, token_hash, role, created_at, revoked_at)
+				VALUES ('key-1', 'live-project', 'Project Key', ?, 'admin', datetime('now'), NULL)
+			`, hash)
+			if err != nil {
+				t.Fatalf("failed to insert key: %v", err)
+			}
+
+			req := httptest.NewRequest("GET", "/api/projects/live-project/tables", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.SetPathValue("project", "live-project")
+			w := httptest.NewRecorder()
+
+			handler := RequireProjectAccess(db)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("%s project: got %d, want %d, body=%s", state, w.Code, http.StatusOK, w.Body.String())
+			}
+		})
 	}
 }
