@@ -1,3 +1,4 @@
 data/
 *.sh
 !scripts/*.sh
+.claude/worktrees/
