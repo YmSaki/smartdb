@@ -349,7 +349,7 @@ Response: 204 No Content
 主要エラーコード:
 - `UNAUTHORIZED` (401): 認証なし/不正トークン
 - `FORBIDDEN` (403): 権限不足/プロジェクト不一致
-- `PROJECT_NOT_FOUND` (404): プロジェクト不在
+- `PROJECT_NOT_FOUND` (404): プロジェクト不在。`deleted`/`wiped`状態のプロジェクトも、`auth.RequireProjectAccess`（`GET`/`PATCH /projects/{project}`、SQL実行、Backup/Restore、APIキー管理など`{project}`配下の全エンドポイント）ではこの扱いになる。削除前から有効なプロジェクトキーであっても、`DELETE /projects/{project}`実行後はこれらのエンドポイントにアクセスできない。
 - `INVALID_PROJECT_ID` (400): ID不正/パス横断
 - `INVALID_SQL` (400): SQL分類失敗/空クエリ
 - `SQL_ERROR` (400): SQLite実行エラー

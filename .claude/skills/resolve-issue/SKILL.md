@@ -10,6 +10,22 @@ per run unless the user explicitly asks to batch several — issues here touch
 auth/SQL execution/backup, so keep diffs reviewable and don't silently stack
 unrelated fixes into one commit.
 
+## 0. If resolving more than one or two issues in this session, track the backlog explicitly
+
+Don't hold "what's next" in conversation memory across a multi-issue run — a
+verified, self-diagnosed High-severity bug (#15) was silently dropped this
+way once, mid-session, despite already having a full fix written into its own
+issue body. Before starting, call `mcp__github__list_issues` (state OPEN),
+sort by the severity order below, and register the full set with
+`TaskCreate`/`TaskList` so each issue gets checked off as its PR merges —
+don't re-derive the queue from memory after every merge.
+
+For independent issues (no shared files, no ordering dependency), consider
+spawning them as parallel background `Agent` calls with
+`isolation: "worktree"`, each owning its own branch/PR end to end, rather
+than serializing everything through one branch — see this repo's `CLAUDE.md`
+for the rationale.
+
 ## 1. Pick the issue
 
 If the user named a number, use it. Otherwise call `mcp__github__list_issues`
@@ -20,6 +36,15 @@ for #8") — don't start a blocked issue before its prerequisite lands.
 
 Read the full issue with `mcp__github__issue_read` even if you just listed
 it — the body carries the actual work plan under "想定される修正方針".
+
+**If this issue touches shared infrastructure another issue resolved earlier
+in the same session also depends on** (auth middleware, the SQL classifier,
+the lock registry, etc.), explicitly re-derive whether that earlier issue's
+behavior still holds before implementing — don't rely solely on CI or the
+automated reviewer to catch the conflict. (#26's fix to
+`auth.RequireProjectAccess` initially broke #14's just-established System Key
+emergency-access invariant; the automated reviewer caught it, but it should
+have been caught before pushing.)
 
 ## 2. Re-verify the plan against current code
 
@@ -54,6 +79,13 @@ neighboring file in the same package before writing if unsure).
 Add/update the tests the issue's plan calls for. If the issue includes a
 reproduction snippet (from `codebase-review`'s verification step), turn it
 into a permanent test rather than re-deriving one.
+
+If your fix adds a check to shared middleware/infrastructure (e.g.
+`auth.RequireProjectAccess`), grep for callers that already do the same
+lookup downstream — a middleware-level `project.GetProject` call added for
+#26 left `GetProjectDetailHandler`/`PatchProjectHandler` doing a now-partly-
+redundant second lookup. Consolidate if cheap, otherwise at least note it
+(a follow-up issue is fine) rather than letting silent duplication stand.
 
 ## 5. Quality gate — must pass before committing
 
@@ -101,3 +133,10 @@ don't reintroduce it.
   an extra read-through of the diff against the exact attack scenario in
   the issue's "再現" section before calling it done — passing tests alone
   isn't sufficient evidence for those.
+- If `scripts/gh-issue-create.sh` (used by the automated PR-review bot) or
+  another piece of this repo's own CI tooling fails the same way twice
+  across different PRs (e.g. a missing label), that's a signal to fix the
+  workflow/tooling itself in this PR or a quick follow-up — not to keep
+  filing the bot's follow-up issues by hand every time. You almost
+  certainly own the broken piece; this repo's CI workflows were authored by
+  a prior Claude Code session, not a third party.

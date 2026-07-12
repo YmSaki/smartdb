@@ -160,6 +160,8 @@ POST /api/v1/projects
 DELETE /api/v1/projects/{project}
 ```
 
+論理削除(state→deleted)後は、そのプロジェクトに紐づく既存のプロジェクトキーであっても、SQL実行・Backup/Restore・APIキー管理を含む`/projects/{project}/...`配下の全エンドポイントに404 `PROJECT_NOT_FOUND`でアクセス拒否される(§7参照)。実データやAPIキー自体はwipeされるまで残るが、参照はできなくなる。
+
 ---
 
 ### Project一覧
