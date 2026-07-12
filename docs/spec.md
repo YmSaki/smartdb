@@ -303,7 +303,7 @@ DELETE /api/v1/projects/{project}/apikeys/{id}
 * Project一覧
 * Project削除(論理削除、state→deleted)
 * Project wipe(実データ削除、state→wiped)
-* 任意のアクティブなプロジェクトへのAPIキー発行・失効(`POST`/`DELETE /projects/{project}/apikeys/...`)。新規プロジェクト作成直後の初回キー発行に限定されず、運用上の緊急アクセス手段としていつでも呼び出せる。
+* 任意のプロジェクトへのAPIキー発行・失効(`POST`/`DELETE /projects/{project}/apikeys/...`)。新規プロジェクト作成直後の初回キー発行に限定されず、運用上の緊急アクセス手段としていつでも呼び出せる。対象プロジェクトのstate(`deleted`/`wiped`等)によるチェックは無く、行が存在する限り呼び出せる。
 
 不可(直接には)
 
